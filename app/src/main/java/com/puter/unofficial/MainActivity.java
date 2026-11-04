@@ -72,6 +72,7 @@ import com.puter.unofficial.models.AIModelDefinition;
 import com.puter.unofficial.models.ChatMessage;
 import com.puter.unofficial.models.ChatSession;
 import com.puter.unofficial.models.GroundingSource;
+import com.puter.unofficial.models.ScrapedImageItem;
 import com.puter.unofficial.models.StagedFile;
 
 import org.json.JSONArray;
@@ -932,6 +933,11 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             }
 
             @Override
+            public void onScrapedImageClicked(int position, ScrapedImageItem item, List<ScrapedImageItem> allItems) {
+                dialogManager.showFullscreenImageGallery(position, allItems, webAppInterface);
+            }
+
+            @Override
             public void onLongPressMessage(ChatMessage message, View view) {
                 int[] loc = new int[2];
                 view.getLocationOnScreen(loc);
@@ -1278,6 +1284,20 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         }
     }
 
+    private boolean isImageRequestIntent(String prompt) {
+        if (prompt == null) return false;
+        String lower = prompt.toLowerCase(Locale.US);
+        return lower.contains("show image") || lower.contains("show images") ||
+               lower.contains("show some images") || lower.contains("show photo") ||
+               lower.contains("show photos") || lower.contains("find image") ||
+               lower.contains("find images") || lower.contains("find photo") ||
+               lower.contains("find photos") || lower.contains("see image") ||
+               lower.contains("see images") || lower.contains("view image") ||
+               lower.contains("view images") || lower.contains("show pictures") ||
+               lower.contains("display image") || lower.contains("display images") ||
+               lower.contains("required image") || lower.contains("required images");
+    }
+
     private void dispatchSendMessage() {
         String prompt = etMessageInput.getText().toString().trim();
         List<StagedFile> attachments = new ArrayList<>(stagedAttachmentsAdapter.getItems());
@@ -1309,6 +1329,25 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         );
         assistantMsg.setModelUsed(activeModelId);
         assistantMsg.setStreaming(true);
+
+        // CONDITIONAL IMAGE INTENT TRIGGER:
+        // If the user requests to see/find images and we have cached web images from a crawl,
+        // attach them to this assistant turn so the horizontal carousel renders immediately!
+        if (isImageRequestIntent(prompt)) {
+            List<ScrapedImageItem> cachedImages = Collections.emptyList();
+            if (currentSession != null) {
+                cachedImages = sessionManager.getCachedScrapedImages(currentSession.getId());
+            }
+            if (cachedImages.isEmpty() && PuterChatManager.getActiveInstance() != null) {
+                cachedImages = PuterChatManager.getActiveInstance().getLastExtractedImages();
+            }
+            if (!cachedImages.isEmpty()) {
+                assistantMsg.setScrapedImages(cachedImages);
+                LiveLogManager.getInstance().ok("IMAGE_INTENT", "Attached Cached Images to Bubble",
+                        "Count: " + cachedImages.size() + " images");
+            }
+        }
+
         chatAdapter.addMessage(assistantMsg);
         currentSession.addMessage(assistantMsg);
         currentActiveAssistantMsg = assistantMsg;
