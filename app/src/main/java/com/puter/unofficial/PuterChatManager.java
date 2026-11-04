@@ -154,16 +154,16 @@ public class PuterChatManager {
                 String url = specs != null ? specs.optString("url", "") : "";
                 String content = specs != null ? specs.optString("raw_content", specs.optString("content", "")) : "";
 
-                // Intercept image collection from payload
+                // Intercept image collection from payload (handles JSON objects and raw URL strings)
                 JSONArray imgs = item.optJSONArray("images");
                 if (imgs == null && specs != null) {
                     imgs = specs.optJSONArray("images");
                 }
                 if (imgs != null) {
                     for (int j = 0; j < imgs.length(); j++) {
-                        JSONObject imgObj = imgs.optJSONObject(j);
-                        if (imgObj != null) {
-                            ScrapedImageItem sImg = ScrapedImageItem.fromJson(imgObj);
+                        Object imgEntry = imgs.opt(j);
+                        if (imgEntry instanceof JSONObject) {
+                            ScrapedImageItem sImg = ScrapedImageItem.fromJson((JSONObject) imgEntry);
                             if (sImg != null && sImg.isValid()) {
                                 if (sImg.getTitle().isEmpty()) {
                                     sImg.setTitle(title);
@@ -172,6 +172,11 @@ public class PuterChatManager {
                                     sImg.setSourceUrl(url);
                                 }
                                 foundImages.add(sImg);
+                            }
+                        } else if (imgEntry instanceof String) {
+                            String u = (String) imgEntry;
+                            if (u.startsWith("http://") || u.startsWith("https://")) {
+                                foundImages.add(new ScrapedImageItem(u, title, url, ""));
                             }
                         }
                     }
@@ -231,7 +236,7 @@ public class PuterChatManager {
         String contextBlock = buildContextFromScrapedData(rawScrapedJson);
         this.currentSessionWebContext = contextBlock; // Persist context in memory
         String augmentedPrompt = userPrompt + "\n" + contextBlock +
-                "\n\nInstruction: Use the live web context above to provide an accurate, up-to-date answer to the user query.";
+                "\n\nInstruction: Use the live web context above to provide an accurate, up-to-date answer to the user query. Do not output synthetic image generation commands or dalle.text2im tool-calls.";
 
         sendChatCompletion(history, augmentedPrompt, attachments, modelId, config, listener);
     }
@@ -361,7 +366,7 @@ public class PuterChatManager {
                 if (!isImageGen && currentSessionWebContext != null && !currentSessionWebContext.trim().isEmpty()) {
                     if (!effectivePrompt.contains("--- [LIVE WEB SCRAPED CONTEXT VIA AUTO-MODE] ---")) {
                         effectivePrompt = effectivePrompt + "\n\n" + currentSessionWebContext +
-                                "\n\nInstruction: Maintain context of the above scraped live data to answer this follow-up request thoroughly.";
+                                "\n\nInstruction: Maintain context of the above scraped live data to answer this follow-up request thoroughly. Answer in natural prose without emitting synthetic dalle.text2im tool calls.";
                     }
                 }
 
