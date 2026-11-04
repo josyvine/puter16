@@ -14,6 +14,7 @@ public class ChatMessage {
     private long timestamp;
     private List<StagedFile> attachments = new ArrayList<>();
     private List<GroundingSource> groundingSources = new ArrayList<>();
+    private List<ScrapedImageItem> scrapedImages = new ArrayList<>();
     private boolean isError = false;
     private boolean isStreaming = false;
     private String modelUsed = "";
@@ -72,6 +73,27 @@ public class ChatMessage {
 
     public void setGroundingSources(List<GroundingSource> groundingSources) {
         this.groundingSources = groundingSources != null ? groundingSources : new ArrayList<>();
+    }
+
+    public List<ScrapedImageItem> getScrapedImages() {
+        return scrapedImages;
+    }
+
+    public void setScrapedImages(List<ScrapedImageItem> scrapedImages) {
+        this.scrapedImages = scrapedImages != null ? scrapedImages : new ArrayList<>();
+    }
+
+    public boolean hasScrapedImages() {
+        return scrapedImages != null && !scrapedImages.isEmpty();
+    }
+
+    public void addScrapedImage(ScrapedImageItem item) {
+        if (item != null && item.isValid()) {
+            if (this.scrapedImages == null) {
+                this.scrapedImages = new ArrayList<>();
+            }
+            this.scrapedImages.add(item);
+        }
     }
 
     public boolean isError() {
