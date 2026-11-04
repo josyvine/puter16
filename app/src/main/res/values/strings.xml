@@ -73,4 +73,12 @@
 
     <!-- Permissions -->
     <string name="permission_required">Permissions required for Voice, Camera, and Audio features.</string>
+
+    <!-- Scraped Web Images & Fullscreen Gallery Viewer -->
+    <string name="learn_more">Learn more</string>
+    <string name="gallery_title">Web Images</string>
+    <string name="gallery_save_success">Image saved to gallery</string>
+    <string name="gallery_save_failed">Failed to save image</string>
+    <string name="gallery_saving">Saving image...</string>
+    <string name="images_available">Web images available</string>
 </resources>
