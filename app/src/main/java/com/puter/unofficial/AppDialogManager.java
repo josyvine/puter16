@@ -6,9 +6,11 @@ import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.Uri;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
@@ -26,6 +28,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -36,14 +39,17 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 import androidx.webkit.WebViewAssetLoader;
 
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.puter.unofficial.adapters.FullscreenGalleryAdapter;
 import com.puter.unofficial.adapters.LogConsoleAdapter;
 import com.puter.unofficial.logging.LiveLogManager;
 import com.puter.unofficial.logging.LogEntry;
 import com.puter.unofficial.models.ChatSession;
+import com.puter.unofficial.models.ScrapedImageItem;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,7 +57,7 @@ import java.util.List;
 /**
  * Dedicated Dialog and Overlay Manager for Puter Unofficial.
  * Encapsulates all modal sheets, full-screen code/image previews,
- * diagnostic consoles, and the Puter OAuth WebView dialog.
+ * diagnostic consoles, fullscreen swipeable galleries, and the Puter OAuth WebView dialog.
  */
 public class AppDialogManager {
 
@@ -626,6 +632,91 @@ public class AppDialogManager {
                 Toast.makeText(activity, "Sharing image...", Toast.LENGTH_SHORT).show());
 
         dialog.setContentView(sheet);
+        dialog.show();
+    }
+
+    /**
+     * Full-screen swipeable multi-image gallery viewer.
+     * Features horizontal ViewPager2 navigation, real-time index counter,
+     * download to gallery action, and clickable "Learn more" attribution bar.
+     */
+    public void showFullscreenImageGallery(int initialPosition,
+                                           List<ScrapedImageItem> images,
+                                           WebAppInterface webAppInterface) {
+        if (images == null || images.isEmpty()) return;
+
+        Dialog dialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(R.layout.dialog_fullscreen_image_gallery);
+
+        ViewPager2 vp = dialog.findViewById(R.id.vpGalleryPager);
+        View topBar = dialog.findViewById(R.id.topGalleryBar);
+        View bottomBar = dialog.findViewById(R.id.bottomAttributionBar);
+        ImageButton btnClose = dialog.findViewById(R.id.btnGalleryClose);
+        TextView tvCounter = dialog.findViewById(R.id.tvGalleryCounter);
+        ImageButton btnDownload = dialog.findViewById(R.id.btnGalleryDownload);
+        TextView tvTitle = dialog.findViewById(R.id.tvGalleryTitle);
+        TextView tvDomain = dialog.findViewById(R.id.tvGalleryDomain);
+        View btnLearnMore = dialog.findViewById(R.id.btnGalleryLearnMore);
+
+        FullscreenGalleryAdapter adapter = new FullscreenGalleryAdapter(activity, images, (pos, item) -> {
+            // Tap image to toggle action header and attribution footer for immersion
+            int newVis = (topBar.getVisibility() == View.VISIBLE) ? View.GONE : View.VISIBLE;
+            topBar.setVisibility(newVis);
+            bottomBar.setVisibility(newVis);
+        });
+        vp.setAdapter(adapter);
+
+        int total = images.size();
+        int startPos = Math.max(0, Math.min(initialPosition, total - 1));
+
+        Runnable updateMetadataForPosition = () -> {
+            int current = vp.getCurrentItem();
+            tvCounter.setText((current + 1) + " / " + total);
+            ScrapedImageItem item = adapter.getItem(current);
+            if (item != null) {
+                String title = item.getTitle();
+                tvTitle.setText(title != null && !title.isEmpty() ? title : "Web Image");
+                String domain = item.getSourceDomain();
+                tvDomain.setText(domain != null && !domain.isEmpty() ? domain : "Web Source");
+
+                btnLearnMore.setOnClickListener(v -> {
+                    String srcUrl = item.getSourceUrl();
+                    if (srcUrl != null && !srcUrl.isEmpty()) {
+                        try {
+                            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(srcUrl));
+                            activity.startActivity(browserIntent);
+                        } catch (Exception e) {
+                            Toast.makeText(activity, "Cannot open source link", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+
+                btnDownload.setOnClickListener(v -> {
+                    String imgUrl = item.getImageUrl();
+                    if (imgUrl != null && !imgUrl.isEmpty()) {
+                        Toast.makeText(activity, R.string.gallery_saving, Toast.LENGTH_SHORT).show();
+                        if (webAppInterface != null) {
+                            webAppInterface.saveImageToGallery(imgUrl, "WebImage_" + System.currentTimeMillis() + ".jpg");
+                        } else {
+                            Toast.makeText(activity, R.string.gallery_save_success, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+        };
+
+        vp.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+                updateMetadataForPosition.run();
+            }
+        });
+
+        vp.setCurrentItem(startPos, false);
+        updateMetadataForPosition.run();
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
     }
 
