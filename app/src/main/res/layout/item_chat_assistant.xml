@@ -80,6 +80,17 @@
             android:layout_marginTop="6dp"
             android:orientation="vertical" />
 
+        <!-- Scraped Web Images Horizontal Carousel (Auto-Mode) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvScrapedImagesCarousel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:clipToPadding="false"
+            android:overScrollMode="never"
+            android:visibility="gone" />
+
         <!-- Google Search Grounding Citations Chips List -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvGroundingCitations"
