@@ -24,6 +24,7 @@ import com.puter.unofficial.CodeSyntaxHighlighter;
 import com.puter.unofficial.NativeMarkdownParser;
 import com.puter.unofficial.R;
 import com.puter.unofficial.models.ChatMessage;
+import com.puter.unofficial.models.ScrapedImageItem;
 import com.puter.unofficial.models.StagedFile;
 
 import java.text.SimpleDateFormat;
@@ -53,6 +54,8 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         default void onLongPressMessage(ChatMessage message, View view, float rawX, float rawY) {
             onLongPressMessage(message, view);
         }
+
+        default void onScrapedImageClicked(int position, ScrapedImageItem item, List<ScrapedImageItem> allItems) {}
     }
 
     private final List<ChatMessage> messages = new ArrayList<>();
@@ -282,6 +285,26 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 aHolder.btnDownloadImage.setVisibility(View.GONE);
             }
 
+            // Scraped Web Images Horizontal Carousel (Auto Mode)
+            if (message.hasScrapedImages()) {
+                aHolder.rvScrapedImagesCarousel.setVisibility(View.VISIBLE);
+                aHolder.rvScrapedImagesCarousel.setLayoutManager(
+                        new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+                );
+                ScrapedImageCarouselAdapter carouselAdapter = new ScrapedImageCarouselAdapter(
+                        context,
+                        message.getScrapedImages(),
+                        (pos, item, allItems) -> {
+                            if (actionListener != null) {
+                                actionListener.onScrapedImageClicked(pos, item, allItems);
+                            }
+                        }
+                );
+                aHolder.rvScrapedImagesCarousel.setAdapter(carouselAdapter);
+            } else {
+                aHolder.rvScrapedImagesCarousel.setVisibility(View.GONE);
+            }
+
             // Grounding Citations
             if (message.getGroundingSources() != null && !message.getGroundingSources().isEmpty()) {
                 aHolder.rvCitations.setVisibility(View.VISIBLE);
@@ -386,6 +409,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         ImageView ivGeneratedImage;
         ImageView btnDownloadImage;
         LinearLayout llCodeBlocks;
+        RecyclerView rvScrapedImagesCarousel;
         RecyclerView rvCitations;
         View flSpeakAssistantContainer;
         ImageView btnCopy;
@@ -402,6 +426,7 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             ivGeneratedImage = v.findViewById(R.id.ivGeneratedImage);
             btnDownloadImage = v.findViewById(R.id.btnDownloadImageTiny);
             llCodeBlocks = v.findViewById(R.id.llCodeBlocksContainer);
+            rvScrapedImagesCarousel = v.findViewById(R.id.rvScrapedImagesCarousel);
             rvCitations = v.findViewById(R.id.rvGroundingCitations);
             flSpeakAssistantContainer = v.findViewById(R.id.flSpeakAssistantContainer);
             btnCopy = v.findViewById(R.id.btnCopyAssistant);
