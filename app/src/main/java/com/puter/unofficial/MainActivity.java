@@ -178,6 +178,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     private AppDialogManager dialogManager;
     private UrlContextScraper urlContextScraper;
     private ModelCatalogManager modelCatalogManager;
+    private PuterChatManager puterChatManager;
 
     // Adapters & Core Services
     private ChatAdapter chatAdapter;
@@ -230,6 +231,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         prefs = getSharedPreferences(AppConstants.PREF_NAME, MODE_PRIVATE);
         sessionManager = ChatSessionManager.getInstance(this);
         geminiService = new GeminiService(this);
+        puterChatManager = new PuterChatManager(this); // Explicitly initialize PuterChatManager
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 
         activeProvider = prefs.getString(AppConstants.KEY_ACTIVE_PROVIDER, "Puter");
@@ -1335,9 +1337,6 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         assistantMsg.setStreaming(true);
 
         // DIRECT VISUAL INTENT INTERCEPTION & CAROUSEL ACTIVATION:
-        // When the user requests images ("search images", "show images", etc.), inspect the session cache.
-        // If cached web photos exist, bind the horizontal carousel immediately with a clean introduction
-        // and bypass sending raw "search images" to the LLM to prevent synthetic dalle.text2im hallucination!
         if (isImageRequestIntent(prompt)) {
             List<ScrapedImageItem> cachedImages = Collections.emptyList();
             if (currentSession != null) {
@@ -1502,7 +1501,6 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             LiveLogManager.getInstance().ok("AUTO_MODE", "Payload Arrived in Native", "Size: " + (rawContent != null ? rawContent.length() : 0) + " chars");
 
             // CREDIT DRAIN & GHOST TRIGGER PROTECTION
-            // If the exact same payload was already processed in the last 45 seconds, reject it!
             if (rawContent != null && rawContent.equals(lastProcessedPayloadHash) 
                     && (System.currentTimeMillis() - lastProcessedPayloadTime < 45000)) {
                 LiveLogManager.getInstance().warn("AUTO_MODE", "Duplicate Payload Dropped", "Ignored re-entrant payload to protect AI token credits.");
@@ -1552,19 +1550,52 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                     ? pendingAutoModePrompt
                     : "iran us war update";
 
+            // DIRECTLY PARSE AND CACHE SCRAPED WEB IMAGES
+            List<ScrapedImageItem> extractedImages = new ArrayList<>();
+            try {
+                JSONArray arr = new JSONArray(rawContent);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject item = arr.optJSONObject(i);
+                    if (item == null) continue;
+                    JSONObject specs = item.optJSONObject("specifications");
+                    String fallbackTitle = specs != null ? specs.optString("title", "") : "";
+                    String fallbackUrl = specs != null ? specs.optString("url", "") : "";
+
+                    JSONArray imgs = item.optJSONArray("images");
+                    if (imgs == null && specs != null) imgs = specs.optJSONArray("images");
+                    if (imgs != null) {
+                        for (int j = 0; j < imgs.length(); j++) {
+                            Object entry = imgs.opt(j);
+                            if (entry instanceof JSONObject) {
+                                ScrapedImageItem s = ScrapedImageItem.fromJson((JSONObject) entry);
+                                if (s != null && s.isValid()) {
+                                    if (s.getTitle().isEmpty()) s.setTitle(fallbackTitle);
+                                    if (s.getSourceUrl().isEmpty()) s.setSourceUrl(fallbackUrl);
+                                    extractedImages.add(s);
+                                }
+                            } else if (entry instanceof String) {
+                                String u = (String) entry;
+                                if (u.startsWith("http://") || u.startsWith("https://")) {
+                                    extractedImages.add(new ScrapedImageItem(u, fallbackTitle, fallbackUrl, ""));
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            if (!extractedImages.isEmpty() && currentSession != null) {
+                sessionManager.cacheScrapedImages(currentSession.getId(), extractedImages);
+                LiveLogManager.getInstance().ok("AUTO_MODE", "Images Cached in Active Session", "Total: " + extractedImages.size() + " images");
+            }
+
             String contextBlock = "";
             if (PuterChatManager.getActiveInstance() != null) {
                 contextBlock = PuterChatManager.getActiveInstance().buildContextFromScrapedData(rawContent);
-                // Guarantee double-caching of extracted web images for the current active session
-                List<ScrapedImageItem> extracted = PuterChatManager.getActiveInstance().getLastExtractedImages();
-                if (extracted != null && !extracted.isEmpty() && currentSession != null) {
-                    sessionManager.cacheScrapedImages(currentSession.getId(), extracted);
-                }
             } else {
                 contextBlock = "\n\n--- [LIVE WEB CONTEXT] ---\n" + rawContent + "\n--- [END CONTEXT] ---\n";
             }
 
-            // PERSISTENT CONTEXT CAPTURE: Lock this context globally in the Activity for turn-2 follow-ups
             this.sessionScrapedWebContext = contextBlock;
             if (PuterChatManager.getActiveInstance() != null) {
                 PuterChatManager.getActiveInstance().setCurrentSessionWebContext(contextBlock);
@@ -1712,7 +1743,6 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         String ratio = currentSession.getConfig().getAspectRatio();
         String sysInst = currentSession.getConfig().getSystemInstructions();
         
-        // PERSISTENT MEMORY REINFORCEMENT FOR PUTER DRIVERS
         if (sessionScrapedWebContext != null && !sessionScrapedWebContext.trim().isEmpty()) {
             if (sysInst == null) sysInst = "";
             if (!sysInst.contains("--- [LIVE WEB SCRAPED CONTEXT VIA AUTO-MODE] ---") && !sysInst.contains("LIVE WEB CONTEXT")) {
@@ -1847,7 +1877,6 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 sysInst = prefs.getString(AppConstants.KEY_CUSTOM_INSTRUCTION, "");
             }
 
-            // GEMINI MEMORY AMNESIA FIX & ANTI-DALLE REJECT: INJECT GROUND TRUTH AND FORBID RAW dalle.text2im TOOL-CALL STRINGS
             StringBuilder sysBuilder = new StringBuilder();
             if (sysInst != null && !sysInst.trim().isEmpty()) {
                 sysBuilder.append(sysInst).append("\n\n");
@@ -1902,11 +1931,43 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             @Override
             public void onComplete(String fullResponse) {
                 runOnUiThread(() -> {
-                    // Safety Filter: If Gemini ever leaks a raw dalle.text2im string, scrub it cleanly
                     String cleanResponse = fullResponse;
+
+                    // DYNAMIC JSON PARSER: Intercept any { "images": [ ... ] } blocks emitted by Gemini
+                    if (cleanResponse != null && cleanResponse.contains("\"images\"") && cleanResponse.contains("http")) {
+                        try {
+                            int start = cleanResponse.indexOf('{');
+                            int end = cleanResponse.lastIndexOf('}');
+                            if (start != -1 && end != -1 && end > start) {
+                                JSONObject imgJson = new JSONObject(cleanResponse.substring(start, end + 1));
+                                JSONArray imgArr = imgJson.optJSONArray("images");
+                                if (imgArr != null && imgArr.length() > 0) {
+                                    List<ScrapedImageItem> dynamicImgs = new ArrayList<>();
+                                    for (int k = 0; k < imgArr.length(); k++) {
+                                        JSONObject io = imgArr.optJSONObject(k);
+                                        if (io != null) {
+                                            ScrapedImageItem item = ScrapedImageItem.fromJson(io);
+                                            if (item != null && item.isValid()) {
+                                                dynamicImgs.add(item);
+                                            }
+                                        }
+                                    }
+                                    if (!dynamicImgs.isEmpty()) {
+                                        assistantMsg.setScrapedImages(dynamicImgs);
+                                        if (currentSession != null) {
+                                            sessionManager.cacheScrapedImages(currentSession.getId(), dynamicImgs);
+                                        }
+                                        cleanResponse = "Here are the web search photographic results related to this topic:";
+                                    }
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+
                     if (cleanResponse != null && cleanResponse.contains("dalle.text2im")) {
                         cleanResponse = "Here are the web search photographic results related to this topic:";
                     }
+
                     assistantMsg.setText(cleanResponse);
                     assistantMsg.setStreaming(false);
                     chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
