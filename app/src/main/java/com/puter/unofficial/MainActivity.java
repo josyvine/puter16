@@ -1286,16 +1286,20 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
 
     private boolean isImageRequestIntent(String prompt) {
         if (prompt == null) return false;
-        String lower = prompt.toLowerCase(Locale.US);
-        return lower.contains("show image") || lower.contains("show images") ||
+        String lower = prompt.toLowerCase(Locale.US).trim();
+        return lower.contains("search image") || lower.contains("search images") ||
+               lower.contains("show image") || lower.contains("show images") ||
                lower.contains("show some images") || lower.contains("show photo") ||
                lower.contains("show photos") || lower.contains("find image") ||
                lower.contains("find images") || lower.contains("find photo") ||
                lower.contains("find photos") || lower.contains("see image") ||
                lower.contains("see images") || lower.contains("view image") ||
-               lower.contains("view images") || lower.contains("show pictures") ||
+               lower.contains("view images") || lower.contains("get image") ||
+               lower.contains("get images") || lower.contains("online image") ||
+               lower.contains("online images") || lower.contains("show pictures") ||
                lower.contains("display image") || lower.contains("display images") ||
-               lower.contains("required image") || lower.contains("required images");
+               lower.contains("required image") || lower.contains("required images") ||
+               lower.equals("images") || lower.equals("photos") || lower.equals("pictures");
     }
 
     private void dispatchSendMessage() {
@@ -1330,9 +1334,10 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         assistantMsg.setModelUsed(activeModelId);
         assistantMsg.setStreaming(true);
 
-        // CONDITIONAL IMAGE INTENT TRIGGER:
-        // If the user requests to see/find images and we have cached web images from a crawl,
-        // attach them to this assistant turn so the horizontal carousel renders immediately!
+        // DIRECT VISUAL INTENT INTERCEPTION & CAROUSEL ACTIVATION:
+        // When the user requests images ("search images", "show images", etc.), inspect the session cache.
+        // If cached web photos exist, bind the horizontal carousel immediately with a clean introduction
+        // and bypass sending raw "search images" to the LLM to prevent synthetic dalle.text2im hallucination!
         if (isImageRequestIntent(prompt)) {
             List<ScrapedImageItem> cachedImages = Collections.emptyList();
             if (currentSession != null) {
@@ -1341,10 +1346,34 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             if (cachedImages.isEmpty() && PuterChatManager.getActiveInstance() != null) {
                 cachedImages = PuterChatManager.getActiveInstance().getLastExtractedImages();
             }
+            if (cachedImages.isEmpty() && currentSession != null && currentSession.getMessages() != null) {
+                for (int i = currentSession.getMessages().size() - 1; i >= 0; i--) {
+                    ChatMessage prior = currentSession.getMessages().get(i);
+                    if (prior != null && prior.hasScrapedImages()) {
+                        cachedImages = prior.getScrapedImages();
+                        break;
+                    }
+                }
+            }
+
             if (!cachedImages.isEmpty()) {
                 assistantMsg.setScrapedImages(cachedImages);
-                LiveLogManager.getInstance().ok("IMAGE_INTENT", "Attached Cached Images to Bubble",
+                assistantMsg.setText("Here are real online photographs retrieved from the web search results:");
+                assistantMsg.setStreaming(false);
+
+                chatAdapter.addMessage(assistantMsg);
+                currentSession.addMessage(assistantMsg);
+                currentActiveAssistantMsg = assistantMsg;
+                chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+                rvChatTimeline.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+                sessionManager.saveSession(currentSession);
+
+                LiveLogManager.getInstance().ok("IMAGE_INTENT", "Rendered Cached Images in Bubble",
                         "Count: " + cachedImages.size() + " images");
+                finishGeneration();
+                return;
+            } else {
+                LiveLogManager.getInstance().warn("IMAGE_INTENT", "No Cached Images in Session", "Prompt was: " + prompt);
             }
         }
 
@@ -1526,6 +1555,11 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             String contextBlock = "";
             if (PuterChatManager.getActiveInstance() != null) {
                 contextBlock = PuterChatManager.getActiveInstance().buildContextFromScrapedData(rawContent);
+                // Guarantee double-caching of extracted web images for the current active session
+                List<ScrapedImageItem> extracted = PuterChatManager.getActiveInstance().getLastExtractedImages();
+                if (extracted != null && !extracted.isEmpty() && currentSession != null) {
+                    sessionManager.cacheScrapedImages(currentSession.getId(), extracted);
+                }
             } else {
                 contextBlock = "\n\n--- [LIVE WEB CONTEXT] ---\n" + rawContent + "\n--- [END CONTEXT] ---\n";
             }
@@ -1813,25 +1847,28 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 sysInst = prefs.getString(AppConstants.KEY_CUSTOM_INSTRUCTION, "");
             }
 
-            // GEMINI MEMORY AMNESIA FIX: INJECT PERSISTENT SCRAPED WEB CONTEXT AS GROUND TRUTH
+            // GEMINI MEMORY AMNESIA FIX & ANTI-DALLE REJECT: INJECT GROUND TRUTH AND FORBID RAW dalle.text2im TOOL-CALL STRINGS
+            StringBuilder sysBuilder = new StringBuilder();
+            if (sysInst != null && !sysInst.trim().isEmpty()) {
+                sysBuilder.append(sysInst).append("\n\n");
+            }
+
             if (sessionScrapedWebContext != null && !sessionScrapedWebContext.trim().isEmpty()) {
-                if (sysInst == null) sysInst = "";
-                if (!sysInst.contains("--- [LIVE WEB SCRAPED CONTEXT VIA AUTO-MODE] ---") && !sysInst.contains("LIVE WEB CONTEXT")) {
-                    sysInst = (sysInst.isEmpty() ? "" : sysInst + "\n\n") +
-                            "GROUND TRUTH LIVE WEB CONTEXT (Strict Directive: Maintain full memory of this verified real-time scraped report for all follow-up questions in this session. Never claim you lack real-time access when answered based on this report):\n" +
-                            sessionScrapedWebContext;
+                if (!sysBuilder.toString().contains("--- [LIVE WEB SCRAPED CONTEXT VIA AUTO-MODE] ---") && !sysBuilder.toString().contains("LIVE WEB CONTEXT")) {
+                    sysBuilder.append("GROUND TRUTH LIVE WEB CONTEXT (Strict Directive: Maintain full memory of this verified real-time scraped report for all follow-up questions in this session. Never claim you lack real-time access when answered based on this report):\n")
+                              .append(sessionScrapedWebContext).append("\n\n");
                 }
             }
 
-            if (sysInst != null && !sysInst.trim().isEmpty()) {
-                JSONObject sysObj = new JSONObject();
-                JSONArray sysParts = new JSONArray();
-                JSONObject sysTextPart = new JSONObject();
-                sysTextPart.put("text", sysInst);
-                sysParts.put(sysTextPart);
-                sysObj.put("parts", sysParts);
-                payload.put("systemInstruction", sysObj);
-            }
+            sysBuilder.append("STRICT OUTPUT DIRECTIVE: NEVER output raw JSON tool-calls, actions, or synthetic generation commands such as {\"action\": \"dalle.text2im\"}. Always answer directly in natural conversational prose.");
+
+            JSONObject sysObj = new JSONObject();
+            JSONArray sysParts = new JSONArray();
+            JSONObject sysTextPart = new JSONObject();
+            sysTextPart.put("text", sysBuilder.toString());
+            sysParts.put(sysTextPart);
+            sysObj.put("parts", sysParts);
+            payload.put("systemInstruction", sysObj);
 
             JSONArray toolsArray = new JSONArray();
             if (currentSession != null && currentSession.getConfig() != null && currentSession.getConfig().isWebGroundingEnabled()) {
@@ -1865,7 +1902,12 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             @Override
             public void onComplete(String fullResponse) {
                 runOnUiThread(() -> {
-                    assistantMsg.setText(fullResponse);
+                    // Safety Filter: If Gemini ever leaks a raw dalle.text2im string, scrub it cleanly
+                    String cleanResponse = fullResponse;
+                    if (cleanResponse != null && cleanResponse.contains("dalle.text2im")) {
+                        cleanResponse = "Here are the web search photographic results related to this topic:";
+                    }
+                    assistantMsg.setText(cleanResponse);
                     assistantMsg.setStreaming(false);
                     chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
                     finishGeneration();
