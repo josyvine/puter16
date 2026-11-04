@@ -100,6 +100,15 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
     }
 
+    public void attachScrapedImagesToLastMessage(List<ScrapedImageItem> images) {
+        if (!messages.isEmpty() && images != null && !images.isEmpty()) {
+            int lastIndex = messages.size() - 1;
+            ChatMessage last = messages.get(lastIndex);
+            last.setScrapedImages(images);
+            notifyItemChanged(lastIndex);
+        }
+    }
+
     public void removeMessage(ChatMessage message) {
         int index = messages.indexOf(message);
         if (index >= 0) {
@@ -285,22 +294,30 @@ public class ChatAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 aHolder.btnDownloadImage.setVisibility(View.GONE);
             }
 
-            // Scraped Web Images Horizontal Carousel (Auto Mode)
+            // Scraped Web Images Horizontal Carousel (Auto Mode & Web Image Retrieval)
             if (message.hasScrapedImages()) {
                 aHolder.rvScrapedImagesCarousel.setVisibility(View.VISIBLE);
-                aHolder.rvScrapedImagesCarousel.setLayoutManager(
-                        new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
-                );
-                ScrapedImageCarouselAdapter carouselAdapter = new ScrapedImageCarouselAdapter(
-                        context,
-                        message.getScrapedImages(),
-                        (pos, item, allItems) -> {
-                            if (actionListener != null) {
-                                actionListener.onScrapedImageClicked(pos, item, allItems);
+                RecyclerView.LayoutManager lm = aHolder.rvScrapedImagesCarousel.getLayoutManager();
+                if (lm == null) {
+                    aHolder.rvScrapedImagesCarousel.setLayoutManager(
+                            new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+                    );
+                }
+                RecyclerView.Adapter<?> existing = aHolder.rvScrapedImagesCarousel.getAdapter();
+                if (existing instanceof ScrapedImageCarouselAdapter) {
+                    ((ScrapedImageCarouselAdapter) existing).updateData(message.getScrapedImages());
+                } else {
+                    ScrapedImageCarouselAdapter carouselAdapter = new ScrapedImageCarouselAdapter(
+                            context,
+                            message.getScrapedImages(),
+                            (pos, item, allItems) -> {
+                                if (actionListener != null) {
+                                    actionListener.onScrapedImageClicked(pos, item, allItems);
+                                }
                             }
-                        }
-                );
-                aHolder.rvScrapedImagesCarousel.setAdapter(carouselAdapter);
+                    );
+                    aHolder.rvScrapedImagesCarousel.setAdapter(carouselAdapter);
+                }
             } else {
                 aHolder.rvScrapedImagesCarousel.setVisibility(View.GONE);
             }
