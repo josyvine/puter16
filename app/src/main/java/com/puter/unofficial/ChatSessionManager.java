@@ -8,6 +8,7 @@ import com.puter.unofficial.logging.LiveLogManager;
 import com.puter.unofficial.models.ChatMessage;
 import com.puter.unofficial.models.ChatSession;
 import com.puter.unofficial.models.GroundingSource;
+import com.puter.unofficial.models.ScrapedImageItem;
 import com.puter.unofficial.models.StagedFile;
 
 import org.json.JSONArray;
@@ -16,11 +17,13 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Memory-safe Chat Session Manager.
- * Handles session persistence, history retrieval, and automated purging
- * of bloated legacy media payloads to prevent OutOfMemory crashes.
+ * Handles session persistence, history retrieval, automated purging
+ * of bloated legacy media payloads, and session-level web image caching.
  */
 public class ChatSessionManager {
     private static final String PREF_SESSIONS = "PuterChatSessions";
@@ -31,6 +34,9 @@ public class ChatSessionManager {
 
     private static ChatSessionManager instance;
     private final SharedPreferences prefs;
+
+    // In-memory cache holding harvested web images for the active session
+    private final Map<String, List<ScrapedImageItem>> sessionImageCache = new ConcurrentHashMap<>();
 
     private ChatSessionManager(Context context) {
         this.prefs = context.getApplicationContext().getSharedPreferences(PREF_SESSIONS, Context.MODE_PRIVATE);
@@ -51,6 +57,7 @@ public class ChatSessionManager {
         }
         saveSession(session);
         setCurrentSessionId(sessionId);
+        clearCachedScrapedImages(sessionId);
         return session;
     }
 
@@ -60,6 +67,48 @@ public class ChatSessionManager {
 
     public void setCurrentSessionId(String sessionId) {
         prefs.edit().putString(KEY_CURRENT_SESSION_ID, sessionId).apply();
+    }
+
+    /**
+     * Silently stores extracted web images into the in-memory cache for a session.
+     */
+    public void cacheScrapedImages(String sessionId, List<ScrapedImageItem> images) {
+        if (sessionId == null || images == null || images.isEmpty()) return;
+        List<ScrapedImageItem> current = sessionImageCache.get(sessionId);
+        if (current == null) {
+            current = new ArrayList<>();
+        }
+        for (ScrapedImageItem img : images) {
+            if (img != null && img.isValid() && !current.contains(img)) {
+                current.add(img);
+            }
+        }
+        sessionImageCache.put(sessionId, current);
+    }
+
+    /**
+     * Retrieves cached web images for a session.
+     */
+    public List<ScrapedImageItem> getCachedScrapedImages(String sessionId) {
+        if (sessionId == null) return new ArrayList<>();
+        List<ScrapedImageItem> list = sessionImageCache.get(sessionId);
+        return list != null ? new ArrayList<>(list) : new ArrayList<>();
+    }
+
+    /**
+     * Clears cached images for a specific session.
+     */
+    public void clearCachedScrapedImages(String sessionId) {
+        if (sessionId != null) {
+            sessionImageCache.remove(sessionId);
+        }
+    }
+
+    /**
+     * Purges all in-memory image caches across all sessions.
+     */
+    public void clearAllCachedImages() {
+        sessionImageCache.clear();
     }
 
     public synchronized void saveSession(ChatSession session) {
@@ -113,6 +162,16 @@ public class ChatSessionManager {
                             gArr.put(gj);
                         }
                         mj.put("citations", gArr);
+                    }
+
+                    // Save scraped web image collection
+                    if (m.hasScrapedImages()) {
+                        JSONArray imgArr = new JSONArray();
+                        for (ScrapedImageItem item : m.getScrapedImages()) {
+                            if (item == null || !item.isValid()) continue;
+                            imgArr.put(item.toJson());
+                        }
+                        mj.put("scrapedImages", imgArr);
                     }
 
                     // Save staged attachments with strict memory safety guards
@@ -250,6 +309,20 @@ public class ChatSessionManager {
                         m.setGroundingSources(gsList);
                     }
 
+                    // Restore scraped web image collection
+                    if (mj.has("scrapedImages")) {
+                        JSONArray imgArr = mj.getJSONArray("scrapedImages");
+                        List<ScrapedImageItem> imgList = new ArrayList<>();
+                        for (int j = 0; j < imgArr.length(); j++) {
+                            JSONObject ij = imgArr.getJSONObject(j);
+                            ScrapedImageItem sItem = ScrapedImageItem.fromJson(ij);
+                            if (sItem != null && sItem.isValid()) {
+                                imgList.add(sItem);
+                            }
+                        }
+                        m.setScrapedImages(imgList);
+                    }
+
                     // Restore attachments
                     if (mj.has("attachments")) {
                         JSONArray attArr = mj.getJSONArray("attachments");
@@ -322,6 +395,8 @@ public class ChatSessionManager {
         List<String> ids = getSessionIdsIndex();
         ids.remove(sessionId);
         saveSessionIdsIndex(ids);
+
+        clearCachedScrapedImages(sessionId);
 
         if (sessionId.equals(getCurrentSessionId())) {
             setCurrentSessionId(null);
