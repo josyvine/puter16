@@ -5,10 +5,12 @@ import org.json.JSONObject;
 
 import java.io.Serializable;
 import java.net.URI;
+import java.util.Objects;
 
 /**
  * Model representing an organic web image extracted during Auto-Mode scraping.
  * Holds image source coordinates, webpage origin attribution, and metadata.
+ * Supports polymorphic JSON deserialization across both Kiwi scrapers and LLM responses.
  */
 public class ScrapedImageItem implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -94,17 +96,48 @@ public class ScrapedImageItem implements Serializable {
     }
 
     /**
-     * Deserializes JSONObject into a ScrapedImageItem instance.
+     * Deserializes JSONObject into a ScrapedImageItem instance with polymorphic key support.
+     * Accurately parses schema variants ("url" vs "imageUrl", "description" vs "title").
      */
     public static ScrapedImageItem fromJson(JSONObject json) {
         if (json == null) return null;
 
+        // Image URL: Accept imageUrl, url, src, or image
         String img = json.optString("imageUrl", "");
+        if (img.isEmpty()) img = json.optString("url", "");
+        if (img.isEmpty()) img = json.optString("src", "");
+        if (img.isEmpty()) img = json.optString("image", "");
+
+        // Caption / Title: Accept title, description, caption, or alt
         String ttl = json.optString("title", "");
+        if (ttl.isEmpty()) ttl = json.optString("description", "");
+        if (ttl.isEmpty()) ttl = json.optString("caption", "");
+        if (ttl.isEmpty()) ttl = json.optString("alt", "");
+
+        // Source Webpage URL: Accept sourceUrl, source, pageUrl, or link
         String src = json.optString("sourceUrl", "");
+        if (src.isEmpty()) src = json.optString("source", "");
+        if (src.isEmpty()) src = json.optString("pageUrl", "");
+        if (src.isEmpty()) src = json.optString("link", "");
+
+        // Source Domain: Accept sourceDomain or domain
         String dom = json.optString("sourceDomain", "");
+        if (dom.isEmpty()) dom = json.optString("domain", "");
 
         return new ScrapedImageItem(img, ttl, src, dom);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ScrapedImageItem that = (ScrapedImageItem) o;
+        return Objects.equals(imageUrl, that.imageUrl);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(imageUrl);
     }
 
     /**
