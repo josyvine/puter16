@@ -7,6 +7,7 @@ import android.webkit.CookieManager;
 
 import com.puter.unofficial.models.ChatMessage;
 import com.puter.unofficial.models.GenerationConfig;
+import com.puter.unofficial.models.ScrapedImageItem;
 import com.puter.unofficial.models.StagedFile;
 
 import org.json.JSONArray;
@@ -14,6 +15,7 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -30,7 +32,8 @@ import okhttp3.ResponseBody;
 /**
  * Pure Java OkHttp client for Puter AI chat completions and SSE streaming over HTTP.
  * Correctly intercepts HTTP errors and injects WebKit session cookies, valid Web Origins, 
- * and handles fallbacks across Puter Drivers, Puter OpenAI, and Puter v2 endpoints.
+ * handles fallbacks across Puter Drivers, Puter OpenAI, and Puter v2 endpoints,
+ * and extracts web images into the session cache during Auto-Mode crawls.
  */
 public class PuterChatManager {
     private static final String TAG = "PuterChatManager";
@@ -57,6 +60,8 @@ public class PuterChatManager {
 
     // PERSISTENT CONTEXT MEMORY: Retains scraped web context across follow-up queries in the session
     private String currentSessionWebContext = "";
+    // IN-MEMORY CACHE FOR RECENT SCRAPED IMAGES
+    private final List<ScrapedImageItem> lastExtractedImages = new ArrayList<>();
 
     public interface PuterChatListener {
         void onChunk(String chunkText);
@@ -106,6 +111,9 @@ public class PuterChatManager {
 
     public void clearScrapedContext() {
         this.currentSessionWebContext = "";
+        synchronized (lastExtractedImages) {
+            this.lastExtractedImages.clear();
+        }
     }
 
     public String getCurrentSessionWebContext() {
@@ -116,8 +124,15 @@ public class PuterChatManager {
         this.currentSessionWebContext = (context != null) ? context : "";
     }
 
+    public List<ScrapedImageItem> getLastExtractedImages() {
+        synchronized (lastExtractedImages) {
+            return new ArrayList<>(lastExtractedImages);
+        }
+    }
+
     /**
-     * Parses raw scraped JSON from Nostr/Kiwi into an AI-ready context block.
+     * Parses raw scraped JSON from Nostr/Kiwi into an AI-ready context block
+     * and extracts image items silently into the session image cache.
      */
     public String buildContextFromScrapedData(String rawScrapedJson) {
         if (rawScrapedJson == null || rawScrapedJson.trim().isEmpty()) {
@@ -125,15 +140,42 @@ public class PuterChatManager {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("\n\n--- [LIVE WEB SCRAPED CONTEXT VIA AUTO-MODE] ---\n");
+
+        List<ScrapedImageItem> foundImages = new ArrayList<>();
+
         try {
             JSONArray arr = new JSONArray(rawScrapedJson);
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject item = arr.optJSONObject(i);
                 if (item == null) continue;
+
                 JSONObject specs = item.optJSONObject("specifications");
                 String title = specs != null ? specs.optString("title", "Article " + (i + 1)) : "Web Document";
                 String url = specs != null ? specs.optString("url", "") : "";
                 String content = specs != null ? specs.optString("raw_content", specs.optString("content", "")) : "";
+
+                // Intercept image collection from payload
+                JSONArray imgs = item.optJSONArray("images");
+                if (imgs == null && specs != null) {
+                    imgs = specs.optJSONArray("images");
+                }
+                if (imgs != null) {
+                    for (int j = 0; j < imgs.length(); j++) {
+                        JSONObject imgObj = imgs.optJSONObject(j);
+                        if (imgObj != null) {
+                            ScrapedImageItem sImg = ScrapedImageItem.fromJson(imgObj);
+                            if (sImg != null && sImg.isValid()) {
+                                if (sImg.getTitle().isEmpty()) {
+                                    sImg.setTitle(title);
+                                }
+                                if (sImg.getSourceUrl().isEmpty()) {
+                                    sImg.setSourceUrl(url);
+                                }
+                                foundImages.add(sImg);
+                            }
+                        }
+                    }
+                }
 
                 sb.append("[").append(i + 1).append("] ").append(title).append("\n");
                 if (!url.isEmpty()) sb.append("Source: ").append(url).append("\n");
@@ -149,7 +191,20 @@ public class PuterChatManager {
             sb.append("Scraped Data Payload: ").append(rawScrapedJson).append("\n");
         }
         sb.append("--- [END OF WEB CONTEXT] ---\n");
-        
+
+        // Stash extracted images into memory cache
+        synchronized (lastExtractedImages) {
+            this.lastExtractedImages.clear();
+            this.lastExtractedImages.addAll(foundImages);
+        }
+
+        try {
+            String currentSessionId = ChatSessionManager.getInstance(context).getCurrentSessionId();
+            if (currentSessionId != null && !foundImages.isEmpty()) {
+                ChatSessionManager.getInstance(context).cacheScrapedImages(currentSessionId, foundImages);
+            }
+        } catch (Exception ignored) {}
+
         String result = sb.toString();
         this.currentSessionWebContext = result; // Persist context in memory
         return result;
