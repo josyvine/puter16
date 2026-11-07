@@ -37,6 +37,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
@@ -46,6 +47,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.puter.unofficial.adapters.FullscreenGalleryAdapter;
 import com.puter.unofficial.adapters.LogConsoleAdapter;
+import com.puter.unofficial.http.LocalHttpServerManager;
 import com.puter.unofficial.logging.LiveLogManager;
 import com.puter.unofficial.logging.LogEntry;
 import com.puter.unofficial.models.ChatSession;
@@ -248,6 +250,15 @@ public class AppDialogManager {
             showNostrIdentityDialog();
         });
 
+        // HTTP Bridge Settings hook (Direct kiwi web scraping transport)
+        View btnHttpBridge = sheet.findViewById(R.id.btnHubHttpBridge);
+        if (btnHttpBridge != null) {
+            btnHttpBridge.setOnClickListener(v -> {
+                dialog.dismiss();
+                showHttpBridgeDialog();
+            });
+        }
+
         sheet.findViewById(R.id.btnHubClose).setOnClickListener(v -> dialog.dismiss());
 
         dialog.setContentView(sheet);
@@ -394,6 +405,104 @@ public class AppDialogManager {
         sheet.findViewById(R.id.btnNostrDone).setOnClickListener(v -> dialog.dismiss());
         sheet.findViewById(R.id.btnNostrBack).setOnClickListener(v -> dialog.dismiss());
 
+        dialog.setContentView(sheet);
+        dialog.show();
+    }
+
+    /**
+     * Dedicated Dialog for configuring and managing the Local Embedded HTTP Server.
+     * Provides one-tap IP/Port copy actions and activates the local loopback transport.
+     */
+    public void showHttpBridgeDialog() {
+        BottomSheetDialog dialog = new BottomSheetDialog(activity, R.style.BottomSheetDialogTheme);
+        activeBottomSheet = dialog;
+        View sheet = LayoutInflater.from(activity).inflate(R.layout.dialog_http_bridge_settings, null);
+
+        SwitchCompat switchEnable = sheet.findViewById(R.id.switchEnableHttpBridge);
+        TextView tvStatus = sheet.findViewById(R.id.tvHttpServerStatus);
+        TextView tvLoopback = sheet.findViewById(R.id.tvLoopbackUrl);
+        Button btnCopyLoopback = sheet.findViewById(R.id.btnCopyLoopback);
+        TextView tvLan = sheet.findViewById(R.id.tvLanUrl);
+        Button btnCopyLan = sheet.findViewById(R.id.btnCopyLan);
+        EditText etPort = sheet.findViewById(R.id.etHttpPort);
+        Button btnClose = sheet.findViewById(R.id.btnHttpBridgeClose);
+        Button btnApply = sheet.findViewById(R.id.btnHttpBridgeApply);
+
+        boolean isCurrentlyEnabled = prefs.getBoolean(AppConstants.KEY_HTTP_BRIDGE_ENABLED, false);
+        int savedPort = prefs.getInt(AppConstants.KEY_HTTP_BRIDGE_PORT, AppConstants.DEFAULT_HTTP_BRIDGE_PORT);
+        etPort.setText(String.valueOf(savedPort));
+        switchEnable.setChecked(isCurrentlyEnabled);
+
+        Runnable refreshUrls = () -> {
+            int portVal;
+            try {
+                portVal = Integer.parseInt(etPort.getText().toString().trim());
+            } catch (Exception e) {
+                portVal = AppConstants.DEFAULT_HTTP_BRIDGE_PORT;
+            }
+            tvLoopback.setText("http://127.0.0.1:" + portVal);
+            tvLan.setText("http://" + LocalHttpServerManager.getLocalIpAddress() + ":" + portVal);
+        };
+
+        Runnable updateStatusUI = () -> {
+            boolean running = LocalHttpServerManager.getInstance().isRunning();
+            if (running) {
+                tvStatus.setText("Status: Running on port " + LocalHttpServerManager.getInstance().getCurrentPort());
+                tvStatus.setTextColor(Color.parseColor("#10B981")); // Emerald Green
+            } else {
+                tvStatus.setText("Status: Stopped");
+                tvStatus.setTextColor(Color.parseColor("#EF4444")); // Red
+            }
+        };
+
+        refreshUrls.run();
+        updateStatusUI.run();
+
+        etPort.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { refreshUrls.run(); }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        btnCopyLoopback.setOnClickListener(v -> copyText(tvLoopback.getText().toString()));
+        btnCopyLan.setOnClickListener(v -> copyText(tvLan.getText().toString()));
+
+        btnApply.setOnClickListener(v -> {
+            int enteredPort;
+            try {
+                enteredPort = Integer.parseInt(etPort.getText().toString().trim());
+                if (enteredPort < 1024 || enteredPort > 65535) {
+                    Toast.makeText(activity, "Port must be between 1024 and 65535", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } catch (Exception e) {
+                enteredPort = AppConstants.DEFAULT_HTTP_BRIDGE_PORT;
+            }
+
+            boolean shouldEnable = switchEnable.isChecked();
+            prefs.edit()
+                    .putBoolean(AppConstants.KEY_HTTP_BRIDGE_ENABLED, shouldEnable)
+                    .putInt(AppConstants.KEY_HTTP_BRIDGE_PORT, enteredPort)
+                    .putString(AppConstants.KEY_AUTO_MODE_TRANSPORT, shouldEnable ? AppConstants.TRANSPORT_HTTP : AppConstants.TRANSPORT_NOSTR)
+                    .apply();
+
+            if (shouldEnable) {
+                boolean started = LocalHttpServerManager.getInstance().startServer(activity, enteredPort);
+                if (started) {
+                    Toast.makeText(activity, "HTTP Bridge running on port " + enteredPort, Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(activity, "Failed to start HTTP server", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                LocalHttpServerManager.getInstance().stopServer();
+                Toast.makeText(activity, "HTTP Bridge stopped (reverted to Nostr)", Toast.LENGTH_SHORT).show();
+            }
+
+            updateStatusUI.run();
+            dialog.dismiss();
+        });
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
         dialog.setContentView(sheet);
         dialog.show();
     }
