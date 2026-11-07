@@ -184,6 +184,55 @@
             app:tint="#aaaaaa" />
     </LinearLayout>
 
+    <!-- Item 4: HTTP Bridge Settings (New Transport Option) -->
+    <LinearLayout
+        android:id="@+id/btnHubHttpBridge"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/edit_text_border"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_dashboard"
+            app:tint="#1a73e8" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HTTP Bridge Settings"
+                android:textColor="#333333"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Local HTTP server for Kiwi extension web scraping"
+                android:textColor="#777777"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_chevron_down"
+            android:rotation="270"
+            app:tint="#aaaaaa" />
+    </LinearLayout>
+
     <!-- Close Button -->
     <Button
         android:id="@+id/btnHubClose"
