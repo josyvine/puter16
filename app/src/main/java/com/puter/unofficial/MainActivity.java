@@ -66,6 +66,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.puter.unofficial.adapters.ChatAdapter;
 import com.puter.unofficial.adapters.ModelAccordionAdapter;
 import com.puter.unofficial.adapters.StagedAttachmentsAdapter;
+import com.puter.unofficial.http.LocalHttpServerManager;
 import com.puter.unofficial.logging.LiveLogManager;
 import com.puter.unofficial.logging.LogEntry;
 import com.puter.unofficial.models.AIModelDefinition;
@@ -259,7 +260,22 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         attachFloatingLogBadge();
         LiveLogManager.getInstance(this).addListener(this);
 
+        setupHttpBridge(); // Wire the Local HTTP Bridge daemon & listener
+
         checkAndRequestPermissions();
+    }
+
+    /**
+     * Wires the Local HTTP Server directly to MainActivity's Auto-Mode pipeline.
+     */
+    private void setupHttpBridge() {
+        LocalHttpServerManager.getInstance().setOnScrapedDataReceivedListener(this::onAutoModeDataReceived);
+
+        boolean isHttpEnabled = prefs.getBoolean(AppConstants.KEY_HTTP_BRIDGE_ENABLED, false);
+        int port = prefs.getInt(AppConstants.KEY_HTTP_BRIDGE_PORT, AppConstants.DEFAULT_HTTP_BRIDGE_PORT);
+        if (isHttpEnabled && !LocalHttpServerManager.getInstance().isRunning()) {
+            LocalHttpServerManager.getInstance().startServer(this, port);
+        }
     }
 
     private void initViews() {
@@ -1458,6 +1474,27 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         isGenerating = true;
         updateSendButtonState();
         ecgLoaderContainer.setVisibility(View.VISIBLE);
+
+        boolean isHttpTransport = AppConstants.TRANSPORT_HTTP.equalsIgnoreCase(
+                prefs.getString(AppConstants.KEY_AUTO_MODE_TRANSPORT, AppConstants.TRANSPORT_NOSTR))
+                || prefs.getBoolean(AppConstants.KEY_HTTP_BRIDGE_ENABLED, false);
+
+        if (isHttpTransport) {
+            tvEcgStatus.setText("Auto Mode (HTTP): Awaiting Kiwi extension data...");
+            assistantMsg.setText("Awaiting local HTTP transmission from Kiwi extension...");
+            chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+
+            Handler handler = new Handler(Looper.getMainLooper());
+            handler.postDelayed(() -> {
+                if (!isGenerating) return;
+                assistantMsg.setText("Waking up Kiwi Browser for local scrape...");
+                chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+                wakeUpKiwi(prompt);
+            }, 900);
+            return;
+        }
+
+        // Standard Nostr Transport Sequence (100% Unchanged)
         tvEcgStatus.setText("Auto Mode: Connecting to relay...");
 
         try {
@@ -2490,6 +2527,9 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             headlessAudioBridge.stopPuterChat();
         }
         if (dialogManager != null) dialogManager.dismissAll();
+
+        // Release listener on destruction
+        LocalHttpServerManager.getInstance().setOnScrapedDataReceivedListener(null);
     }
 }
 
