@@ -30,6 +30,14 @@ public class AppConstants {
     public static final String KEY_NOSTR_RELAY_URL = "puter_nostr_relay_url";
     public static final String KEY_EXTENSION_PUBLIC_ID = "puter_extension_public_id";
 
+    // --- HTTP BRIDGE (KIWI EXTENSION DIRECT TRANSPORT) ---
+    public static final String KEY_HTTP_BRIDGE_ENABLED = "puter_http_bridge_enabled";
+    public static final String KEY_HTTP_BRIDGE_PORT = "puter_http_bridge_port";
+    public static final String KEY_AUTO_MODE_TRANSPORT = "puter_auto_mode_transport";
+    public static final int DEFAULT_HTTP_BRIDGE_PORT = 8765;
+    public static final String TRANSPORT_NOSTR = "nostr";
+    public static final String TRANSPORT_HTTP = "http";
+
     // --- GEMINI INTEGRATION & SETTINGS ---
     public static final String KEY_ACTIVE_PROVIDER = "puter_active_provider";
     public static final String KEY_GEMINI_API_KEY = "gemini_user_api_key";
@@ -88,6 +96,7 @@ public class AppConstants {
     public static final String TAG_URL_CONTEXT = "URL_CONTEXT";
     public static final String TAG_LIVE_TRANSCRIPT = "LIVE_TRANSCRIPT";
     public static final String TAG_GEMINI_NETWORK = "GEMINI_NETWORK";
+    public static final String TAG_HTTP_BRIDGE = "HTTP_BRIDGE";
 
     // --- WATCHER SERVICE CONFIGURATION ---
     public static final int WATCHER_NOTIFICATION_ID = 1002;
