@@ -81,4 +81,13 @@
     <string name="gallery_save_failed">Failed to save image</string>
     <string name="gallery_saving">Saving image...</string>
     <string name="images_available">Web images available</string>
+
+    <!-- HTTP Bridge Settings (Kiwi Extension Transport) -->
+    <string name="http_bridge_title">HTTP Bridge Settings</string>
+    <string name="http_bridge_desc">Local HTTP server for Kiwi extension web scraping</string>
+    <string name="http_bridge_enable">Enable HTTP Bridge</string>
+    <string name="http_bridge_status_running">Status: Running on port %1$d</string>
+    <string name="http_bridge_status_stopped">Status: Stopped</string>
+    <string name="http_bridge_copied">Address copied to clipboard</string>
+    <string name="http_bridge_port_hint">Port Number</string>
 </resources>
