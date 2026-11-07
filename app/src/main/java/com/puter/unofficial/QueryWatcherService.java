@@ -16,6 +16,8 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import com.puter.unofficial.http.LocalHttpServerManager;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -34,6 +36,9 @@ import okhttp3.WebSocketListener;
  * QueryWatcherService: Foreground service that silently monitors a Nostr relay
  * for incoming search queries and launches Kiwi Browser in the background task stack
  * if the extension is currently dormant.
+ * 
+ * Also hosts and keeps the Local HTTP Bridge daemon alive in the background
+ * when enabled by the user.
  */
 public class QueryWatcherService extends Service {
 
@@ -77,10 +82,26 @@ public class QueryWatcherService extends Service {
             // 2. Fetch connection configurations
             loadIdentityAndRelay();
             
-            // 3. Initiate the background WebSocket thread loop
+            // 3. Initiate the background WebSocket thread loop (Nostr Monitor untouched)
             startNostrMonitor();
+
+            // 4. Ensure Local HTTP Bridge Server is active in background if enabled
+            checkAndStartHttpBridge();
         }
         return START_STICKY; // Request system recreation if killed
+    }
+
+    /**
+     * Checks user preferences and ensures the Local HTTP Server runs
+     * continuously inside the background service lifecycle.
+     */
+    private void checkAndStartHttpBridge() {
+        boolean isHttpEnabled = prefs.getBoolean(AppConstants.KEY_HTTP_BRIDGE_ENABLED, false);
+        int port = prefs.getInt(AppConstants.KEY_HTTP_BRIDGE_PORT, AppConstants.DEFAULT_HTTP_BRIDGE_PORT);
+        if (isHttpEnabled && !LocalHttpServerManager.getInstance().isRunning()) {
+            LocalHttpServerManager.getInstance().startServer(getApplicationContext(), port);
+            Log.d(TAG, "Local HTTP Bridge daemon activated in background on port " + port);
+        }
     }
 
     /**
@@ -322,6 +343,11 @@ public class QueryWatcherService extends Service {
         }
         if (executor != null) {
             executor.shutdownNow();
+        }
+
+        // Stop local HTTP daemon safely if running
+        if (LocalHttpServerManager.getInstance().isRunning()) {
+            LocalHttpServerManager.getInstance().stopServer();
         }
         
         ActionReportLogger.logAction("WATCHER_SHUTDOWN", "Watcher Service terminated and threads cleanly disposed.");
