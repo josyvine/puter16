@@ -66,6 +66,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.puter.unofficial.adapters.ChatAdapter;
 import com.puter.unofficial.adapters.ModelAccordionAdapter;
 import com.puter.unofficial.adapters.StagedAttachmentsAdapter;
+import com.puter.unofficial.ads.AdMobBannerManager;
 import com.puter.unofficial.http.LocalHttpServerManager;
 import com.puter.unofficial.logging.LiveLogManager;
 import com.puter.unofficial.logging.LogEntry;
@@ -119,6 +120,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     private TextView tvEcgStatus;
     private ImageButton btnStopGeneration;
     private LinearLayout chatControlsContainer;
+    private FrameLayout flAdBannerContainer; // Dedicated non-overlapping AdMob footer container
     private RecyclerView rvStagedAttachments;
     private ImageView btnAttach;
     private EditText etMessageInput;
@@ -180,6 +182,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     private UrlContextScraper urlContextScraper;
     private ModelCatalogManager modelCatalogManager;
     private PuterChatManager puterChatManager;
+    private AdMobBannerManager adMobBannerManager; // Dedicated AdMob manager
 
     // Adapters & Core Services
     private ChatAdapter chatAdapter;
@@ -261,6 +264,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         LiveLogManager.getInstance(this).addListener(this);
 
         setupHttpBridge(); // Wire the Local HTTP Bridge daemon & listener
+        setupAdMobBanner(); // Wire and load the dedicated footer banner ad
 
         checkAndRequestPermissions();
     }
@@ -275,6 +279,16 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         int port = prefs.getInt(AppConstants.KEY_HTTP_BRIDGE_PORT, AppConstants.DEFAULT_HTTP_BRIDGE_PORT);
         if (isHttpEnabled && !LocalHttpServerManager.getInstance().isRunning()) {
             LocalHttpServerManager.getInstance().startServer(this, port);
+        }
+    }
+
+    /**
+     * Initializes and loads the AdMob banner in the dedicated footer container.
+     */
+    private void setupAdMobBanner() {
+        if (flAdBannerContainer != null) {
+            adMobBannerManager = new AdMobBannerManager(this, flAdBannerContainer);
+            adMobBannerManager.loadBanner();
         }
     }
 
@@ -294,6 +308,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         tvEcgStatus = findViewById(R.id.loaderText);
         btnStopGeneration = findViewById(R.id.btnStopGeneration);
         chatControlsContainer = findViewById(R.id.chatControlsContainer);
+        flAdBannerContainer = findViewById(R.id.flAdBannerContainer); // Bound to footer FrameLayout
         rvStagedAttachments = findViewById(R.id.thumbnailArea);
         btnAttach = findViewById(R.id.btnUpload);
         etMessageInput = findViewById(R.id.puterChatInput);
