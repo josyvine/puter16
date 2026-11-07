@@ -17,5 +17,6 @@
         <domain includeSubdomains="true">puter.com</domain>
         <domain includeSubdomains="true">js.puter.com</domain>
         <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
     </domain-config>
 </network-security-config>
