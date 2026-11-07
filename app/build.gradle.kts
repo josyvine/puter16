@@ -91,6 +91,9 @@ dependencies {
   implementation("io.noties.markwon:ext-tables:4.6.2")
   implementation("io.noties.markwon:ext-strikethrough:4.6.2")
 
+  // Official Google Mobile Ads (AdMob) SDK
+  implementation("com.google.android.gms:play-services-ads:23.6.0")
+
   implementation(libs.androidx.core.ktx)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
