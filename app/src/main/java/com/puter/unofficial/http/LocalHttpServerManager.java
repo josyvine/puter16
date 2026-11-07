@@ -10,7 +10,6 @@ import com.puter.unofficial.logging.LiveLogManager;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -83,14 +82,14 @@ public class LocalHttpServerManager {
             threadPool = Executors.newCachedThreadPool();
             isRunning.set(true);
 
-            LiveLogManager.getInstance().log("OK", "Local HTTP Bridge Server started on port " + port);
-            ActionReportLogger.log("LocalHttpServer", "Started on port: " + port);
+            LiveLogManager.getInstance().ok("HTTP_BRIDGE", "Server Started", "Local HTTP Bridge Server started on port " + port);
+            ActionReportLogger.logAction("HTTP_SERVER_START", "Started on port: " + port);
 
             threadPool.execute(this::acceptConnections);
             return true;
         } catch (Exception e) {
-            LiveLogManager.getInstance().log("ERROR", "Failed to bind HTTP Server on port " + port + ": " + e.getMessage());
-            ActionReportLogger.log("LocalHttpServer", "Bind error: " + e.getMessage());
+            LiveLogManager.getInstance().error("HTTP_BRIDGE", "Bind Error", "Failed to bind HTTP Server on port " + port + ": " + e.getMessage());
+            ActionReportLogger.logError("HTTP_SERVER_BIND_FAIL", "Bind error: " + e.getMessage());
             stopServer();
             return false;
         }
@@ -110,8 +109,8 @@ public class LocalHttpServerManager {
 
         serverSocket = null;
         threadPool = null;
-        LiveLogManager.getInstance().log("INFO", "Local HTTP Bridge Server stopped.");
-        ActionReportLogger.log("LocalHttpServer", "Server stopped.");
+        LiveLogManager.getInstance().info("HTTP_BRIDGE", "Server Stopped", "Local HTTP Bridge Server stopped.");
+        ActionReportLogger.logAction("HTTP_SERVER_STOP", "Server stopped.");
     }
 
     public boolean isRunning() {
@@ -193,7 +192,7 @@ public class LocalHttpServerManager {
                 }
 
                 String body = new String(bodyBuffer, 0, totalRead);
-                LiveLogManager.getInstance().log("OK", "Direct HTTP payload received (" + totalRead + " bytes)");
+                LiveLogManager.getInstance().ok("HTTP_BRIDGE", "Payload Received", "Direct HTTP payload received (" + totalRead + " bytes)");
 
                 // Dispatch to Main Looper for Native UI & Session processing
                 mainHandler.post(() -> {
@@ -209,7 +208,7 @@ public class LocalHttpServerManager {
             sendJsonResponse(out, 404, "{\"error\":\"Endpoint not found\"}");
 
         } catch (Exception e) {
-            LiveLogManager.getInstance().log("WARN", "HTTP Bridge connection error: " + e.getMessage());
+            LiveLogManager.getInstance().warn("HTTP_BRIDGE", "Connection Error", "HTTP Bridge connection error: " + e.getMessage());
         } finally {
             try { socket.close(); } catch (Exception ignored) {}
         }
