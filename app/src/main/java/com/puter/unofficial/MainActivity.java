@@ -197,6 +197,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     private ChatSession currentSession;
     private ChatMessage currentActiveAssistantMsg;
     private ChatMessage currentLiveAssistantMsg;
+    private ChatMessage currentLiveUserMsg; // Reused single user bubble per turn (fixes bubble fragmentation)
     private String activeModelId = AppConstants.DEFAULT_MODEL;
     private String activeProvider = "Puter";
     private String previousProviderBeforeLive = null;
@@ -624,6 +625,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             lastRenderedUserText = "";
             lastUserTextTimestamp = 0;
             currentLiveAssistantMsg = null;
+            currentLiveUserMsg = null; // Reset user turn bubble
 
             if (tvLiveVoiceStatus != null) tvLiveVoiceStatus.setText(R.string.voice_status_listening);
             toggleStarAnimation(true);
@@ -639,33 +641,36 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         });
     }
 
+    /**
+     * Handles live user speech recognition chunks.
+     * Consolidates progressive ASR updates into a SINGLE active user bubble per turn,
+     * completely eliminating bubble fragmentation ("cut into pieces").
+     */
     public void onLiveUserTranscript(String text) {
         runOnUiThread(() -> {
             if (text == null || text.trim().isEmpty()) return;
             String cleanText = text.trim();
-            long now = System.currentTimeMillis();
-
-            if (cleanText.equalsIgnoreCase(lastRenderedUserText) && (now - lastUserTextTimestamp) < 2500) {
-                return;
-            }
-
-            lastRenderedUserText = cleanText;
-            lastUserTextTimestamp = now;
 
             if (chatAdapter == null || currentSession == null) return;
 
             try {
-                ChatMessage userMsg = new ChatMessage(
-                        "live_user_" + System.currentTimeMillis(),
-                        ChatMessage.ROLE_USER,
-                        cleanText,
-                        System.currentTimeMillis()
-                );
-                chatAdapter.addMessage(userMsg);
-                currentSession.addMessage(userMsg);
+                // If a user turn bubble already exists, update its content rather than spawning a new bubble
+                if (currentLiveUserMsg == null) {
+                    currentLiveUserMsg = new ChatMessage(
+                            "live_user_" + System.currentTimeMillis(),
+                            ChatMessage.ROLE_USER,
+                            cleanText,
+                            System.currentTimeMillis()
+                    );
+                    chatAdapter.addMessage(currentLiveUserMsg);
+                    currentSession.addMessage(currentLiveUserMsg);
+                    LiveLogManager.getInstance().ok("LIVE_TRANSCRIPT", "User Bubble Created", cleanText);
+                } else {
+                    currentLiveUserMsg.setText(cleanText);
+                    chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
+                }
                 sessionManager.saveSession(currentSession);
                 rvChatTimeline.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
-                LiveLogManager.getInstance().ok("LIVE_TRANSCRIPT", "User Bubble Rendered", "Spoken: \"" + cleanText + "\"");
             } catch (Exception e) {
                 LiveLogManager.getInstance().error("LIVE_TRANSCRIPT", "User Bubble Render Exception", e.getMessage());
             }
@@ -675,6 +680,9 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     public void onLiveModelTranscript(String chunk, boolean isTurnFinished) {
         runOnUiThread(() -> {
             try {
+                // When model starts responding, the current user turn is complete
+                currentLiveUserMsg = null;
+
                 if (chatAdapter == null || currentSession == null) return;
 
                 if (chunk != null && !chunk.isEmpty()) {
@@ -730,6 +738,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 currentLiveAssistantMsg.setStreaming(false);
                 currentLiveAssistantMsg = null;
             }
+            currentLiveUserMsg = null;
             lastRenderedUserText = "";
             lastUserTextTimestamp = 0;
 
@@ -760,6 +769,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 currentLiveAssistantMsg.setStreaming(false);
                 currentLiveAssistantMsg = null;
             }
+            currentLiveUserMsg = null;
             lastRenderedUserText = "";
             lastUserTextTimestamp = 0;
 
@@ -2226,6 +2236,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 currentLiveAssistantMsg.setStreaming(false);
                 currentLiveAssistantMsg = null;
             }
+            currentLiveUserMsg = null;
             lastRenderedUserText = "";
             lastUserTextTimestamp = 0;
             isLiveVoiceConnected = false;
@@ -2280,7 +2291,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                 }
             }
             if (targetLiveModel == null || targetLiveModel.isEmpty()) {
-                targetLiveModel = "gemini-3.1-flash-live-preview";
+                targetLiveModel = "gemini-2.5-flash-native-audio-preview";
             }
         }
 
@@ -2291,12 +2302,17 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             sessionManager.saveSession(currentSession);
         }
 
+        // Resolve Google Search Grounding setting to pass directly into the Live WebSocket engine
+        String groundingMode = prefs.getString("gemini_grounding_mode", "None (Standard)");
+        boolean isSearchGroundingActive = "Google Search".equalsIgnoreCase(groundingMode) 
+                || (currentSession != null && currentSession.getConfig() != null && currentSession.getConfig().isWebGroundingEnabled());
+
         LiveLogManager.getInstance().process("GEMINI_LIVE", "Launching Live Session via Bridge",
-                "Model: " + activeModelId + " | Key Length: " + apiKey.trim().length());
+                "Model: " + activeModelId + " | Grounding: " + isSearchGroundingActive);
         Toast.makeText(this, "Connecting to Live Model: " + selectedModelText.getText(), Toast.LENGTH_SHORT).show();
 
         if (headlessAudioBridge != null) {
-            headlessAudioBridge.startCommentarySession("auto", activeModelId);
+            headlessAudioBridge.startCommentarySession("auto", activeModelId, isSearchGroundingActive);
         } else {
             LiveLogManager.getInstance().error("GEMINI_LIVE", "Bridge Inactive", "HeadlessAudioBridge instance is null.");
             Toast.makeText(this, "Live Audio Bridge not ready yet.", Toast.LENGTH_SHORT).show();
