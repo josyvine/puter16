@@ -13,7 +13,7 @@
  * Exact Gemini Live BidiGenerateContent Audio Engine.
  * Pure Live Voice Character streaming (Puck, Aoede, etc.) over 24kHz PCM,
  * 16kHz hardware microphone capture, live speech transcription bubbles,
- * and deep frame-level diagnostic telemetry.
+ * Google Search Grounding live tool integration, and deep frame-level diagnostic telemetry.
  */
 
 // =========================================================================
@@ -128,7 +128,7 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
     }
 
     if (!selectedModel) {
-        selectedModel = "gemini-3.1-flash-live-preview";
+        selectedModel = "gemini-2.5-flash-native-audio-preview";
     }
 
     let cleanModel = selectedModel.replace(/^models\//, "").trim();
@@ -141,14 +141,33 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
         voiceName = bridge.getVoiceName().split(" ")[0].trim();
     }
 
-    // 3. Resolve Persona / System Instruction
+    // 3. Resolve Persona / System Instruction with Strict Speech Transcription Protection
     let systemInstructionText = "";
     if (bridge && bridge.getCustomInstruction && bridge.getCustomInstruction().trim().length > 0) {
         systemInstructionText = bridge.getCustomInstruction().trim();
     }
 
+    // ASR Protection: Prevent model from transliterating English speech into Telugu or Hindi characters
+    const asrLanguageDirective = "STRICT TRANSCRIPTION DIRECTIVE: Transcribe the user's spoken words verbatim in the exact language spoken. If the user speaks English, you MUST transcribe in standard English Latin script. NEVER transliterate English speech into Telugu, Hindi, or any other regional script.";
+    
+    let combinedSystemInstruction = asrLanguageDirective;
+    if (systemInstructionText && systemInstructionText.length > 0) {
+        combinedSystemInstruction += "\n\n" + systemInstructionText;
+    }
+
+    // 4. Resolve Google Search Grounding Setting
+    let isSearchGroundingEnabled = false;
+    if (bridge) {
+        if (typeof bridge.isGroundingEnabled === 'function') {
+            isSearchGroundingEnabled = bridge.isGroundingEnabled();
+        } else if (typeof bridge.getGroundingMode === 'function') {
+            const mode = bridge.getGroundingMode();
+            isSearchGroundingEnabled = (mode && mode.toLowerCase().includes("search"));
+        }
+    }
+
     sendLogToNative("PROCESS", "GEMINI_LIVE", "Connecting Live Voice Session", 
-        `Model: models/${cleanModel} | Voice: ${voiceName} | Instruction: ${systemInstructionText ? 'Custom' : 'Default'}`);
+        `Model: models/${cleanModel} | Voice: ${voiceName} | Grounding: ${isSearchGroundingEnabled ? 'Google Search ACTIVE' : 'Disabled'}`);
 
     if (!apiKey || apiKey.trim().length === 0) {
         const keyErr = "Gemini API key is missing. Set your key in Settings.";
@@ -157,7 +176,7 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
         return;
     }
 
-    // 4. WebSocket Endpoint
+    // 5. WebSocket Endpoint
     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(apiKey.trim())}`;
     
     try {
@@ -173,7 +192,7 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
     liveWs.onopen = function() {
         sendLogToNative("OK", "GEMINI_LIVE", "WebSocket Connected", `ReadyState: ${liveWs.readyState} | Protocol: ${liveWs.protocol || 'None'}`);
 
-        // Setup configuration with Bidirectional Audio and Transcription hooks
+        // Setup configuration with Bidirectional Audio, Transcription hooks, and Google Search Grounding tools
         const setupPayload = {
             setup: {
                 model: "models/" + cleanModel,
@@ -188,14 +207,19 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
                     }
                 },
                 inputAudioTranscription: {},
-                outputAudioTranscription: {}
+                outputAudioTranscription: {},
+                systemInstruction: {
+                    parts: [{ text: combinedSystemInstruction }]
+                }
             }
         };
 
-        if (systemInstructionText) {
-            setupPayload.setup.systemInstruction = {
-                parts: [{ text: systemInstructionText }]
-            };
+        // INJECT GOOGLE SEARCH GROUNDING TOOL IF ENABLED (Fixes Video 2 Search Grounding Failure)
+        if (isSearchGroundingEnabled) {
+            setupPayload.setup.tools = [
+                { googleSearch: {} }
+            ];
+            sendLogToNative("OK", "GEMINI_LIVE", "Grounding Tool Bound", "Injected { googleSearch: {} } into Live WebSocket setup frame.");
         }
 
         const setupJson = JSON.stringify(setupPayload);
@@ -242,7 +266,12 @@ window.startCommentarySession = function(scriptText, personaPrompt) {
                 const content = payload.serverContent;
                 const frameKeys = Object.keys(content);
 
-                // 1. Process User Speech Transcription (Server ASR) with Strict Deduplication
+                // Capture Grounding Metadata if emitted by Google Search
+                if (content.groundingMetadata) {
+                    sendLogToNative("OK", "GEMINI_GROUNDING", "Live Search Citations Captured", JSON.stringify(content.groundingMetadata));
+                }
+
+                // 1. Process User Speech Transcription (Server ASR)
                 if (content.inputTranscription && content.inputTranscription.text) {
                     const rawUserText = content.inputTranscription.text.trim();
                     if (rawUserText.length > 0 && rawUserText !== lastUserTranscriptInTurn) {
