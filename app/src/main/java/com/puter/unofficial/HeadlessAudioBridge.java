@@ -19,7 +19,7 @@ import org.json.JSONObject;
 /**
  * Native controller managing the background 1x1 pixel WebView running headless_live_audio.html.
  * Bridges native Java calls to the browser AudioContext/WebSocket pipeline for Gemini Live,
- * and controls client-side Puter SDK chat completions and live model discovery.
+ * controls Google Search Grounding tool parameters, and handles Puter SDK chat completions.
  */
 public class HeadlessAudioBridge {
     private static final String TAG = "HeadlessAudioBridge";
@@ -52,6 +52,7 @@ public class HeadlessAudioBridge {
     private LiveAudioEventListener listener;
     private PuterBridgeEventListener puterListener;
     private boolean isSessionActive = false;
+    private boolean isGroundingEnabled = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     public HeadlessAudioBridge(Context context, WebView webView) {
@@ -72,6 +73,14 @@ public class HeadlessAudioBridge {
 
     public boolean isSessionActive() {
         return isSessionActive;
+    }
+
+    public void setGroundingEnabled(boolean enabled) {
+        this.isGroundingEnabled = enabled;
+    }
+
+    public boolean isGroundingEnabled() {
+        return isGroundingEnabled;
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -154,12 +163,20 @@ public class HeadlessAudioBridge {
     }
 
     public void startCommentarySession(String scriptText, String personaPrompt) {
+        startCommentarySession(scriptText, personaPrompt, this.isGroundingEnabled);
+    }
+
+    public void startCommentarySession(String scriptText, String personaPrompt, boolean groundingEnabled) {
+        this.isGroundingEnabled = groundingEnabled;
         mainHandler.post(() -> {
             isSessionActive = true;
             String scriptEscaped = scriptText != null ? JSONObject.quote(scriptText) : "\"\"";
             String personaEscaped = personaPrompt != null ? JSONObject.quote(personaPrompt) : "\"\"";
+            
+            // Set grounding status directly in JavaScript environment before invoking startCommentarySession
             String js = String.format(
                     "try {" +
+                    "  window.isGroundingActive = %b;" +
                     "  if (typeof window.startCommentarySession === 'function') {" +
                     "    window.startCommentarySession(%s, %s);" +
                     "    'LAUNCHED';" +
@@ -168,7 +185,7 @@ public class HeadlessAudioBridge {
                     "  }" +
                     "} catch(e) {" +
                     "  'ERROR:' + e.message;" +
-                    "}", scriptEscaped, personaEscaped);
+                    "}", groundingEnabled, scriptEscaped, personaEscaped);
 
             webView.evaluateJavascript(js, value -> {
                 if (value == null || "\"MISSING_FUNCTION\"".equals(value)) {
@@ -178,7 +195,8 @@ public class HeadlessAudioBridge {
                     LiveLogManager.getInstance().error("GEMINI_LIVE_BRIDGE", "JS Evaluation Exception", value);
                     dispatchError("Live session start error: " + value);
                 } else {
-                    LiveLogManager.getInstance().ok("GEMINI_LIVE_BRIDGE", "Live Session Command Dispatched", "Handshake initiated with model: " + personaPrompt);
+                    LiveLogManager.getInstance().ok("GEMINI_LIVE_BRIDGE", "Live Session Command Dispatched", 
+                            "Model: " + personaPrompt + " | Grounding: " + groundingEnabled);
                 }
             });
         });
