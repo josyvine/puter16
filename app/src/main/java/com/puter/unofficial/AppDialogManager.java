@@ -10,13 +10,16 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
+import android.util.Patterns;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -53,13 +56,26 @@ import com.puter.unofficial.logging.LogEntry;
 import com.puter.unofficial.models.ChatSession;
 import com.puter.unofficial.models.ScrapedImageItem;
 
+import org.json.JSONObject;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 /**
  * Dedicated Dialog and Overlay Manager for Puter Unofficial.
  * Encapsulates all modal sheets, full-screen code/image previews,
- * diagnostic consoles, fullscreen swipeable galleries, and the Puter OAuth WebView dialog.
+ * diagnostic consoles, fullscreen swipeable galleries, rich help manuals,
+ * Formspree contact support dialogs, and the Puter OAuth WebView dialog.
  */
 public class AppDialogManager {
 
@@ -507,12 +523,151 @@ public class AppDialogManager {
         dialog.show();
     }
 
+    // --- RICH HELP MANUAL & FORMSPREE CONTACT SUPPORT (EXACT FROM VIDEO 1) ---
+
+    /**
+     * Displays the complete 8-point manual from Video 1 with an envelope icon to open support feedback.
+     */
     public void showHelpDialog() {
-        new AlertDialog.Builder(activity)
-                .setTitle("Puter Unofficial Help")
-                .setMessage("Pure Native Android client for Puter AI, Gemini Live Audio commentary, and multi-model completions.\n\nDeveloped by Josyvine.")
-                .setPositiveButton("OK", null)
-                .show();
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_help_manual);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.90);
+            dialog.getWindow().setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        dialog.findViewById(R.id.btnHelpClose).setOnClickListener(v -> dialog.dismiss());
+        
+        // Pinned Envelope Icon in bottom left
+        dialog.findViewById(R.id.btnHelpContact).setOnClickListener(v -> {
+            dialog.dismiss();
+            showContactSupportDialog();
+        });
+
+        dialog.show();
+    }
+
+    /**
+     * Modal dialog allowing users to submit support and feedback directly to Formspree API.
+     */
+    public void showContactSupportDialog() {
+        Dialog dialog = new Dialog(activity);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_contact_support);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            int width = (int) (activity.getResources().getDisplayMetrics().widthPixels * 0.90);
+            dialog.getWindow().setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+
+        EditText etName = dialog.findViewById(R.id.etContactName);
+        EditText etEmail = dialog.findViewById(R.id.etContactEmail);
+        EditText etMessage = dialog.findViewById(R.id.etContactMessage);
+        Button btnSend = dialog.findViewById(R.id.btnSubmitContactSupport);
+        ImageView btnClose = dialog.findViewById(R.id.btnCloseContactSupport);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+
+        btnSend.setOnClickListener(v -> {
+            String name = etName.getText().toString().trim();
+            String email = etEmail.getText().toString().trim();
+            String message = etMessage.getText().toString().trim();
+
+            if (name.isEmpty() || email.isEmpty() || message.isEmpty()) {
+                Toast.makeText(activity, "Please fill in all fields", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                Toast.makeText(activity, "Please enter a valid email address", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            btnSend.setEnabled(false);
+            btnSend.setText("SENDING...");
+
+            sendFeedbackToFormspree(name, email, message, new FormspreeCallback() {
+                @Override
+                public void onSuccess() {
+                    activity.runOnUiThread(() -> {
+                        Toast.makeText(activity, "Thank you! Message sent successfully.", Toast.LENGTH_LONG).show();
+                        dialog.dismiss();
+                    });
+                }
+
+                @Override
+                public void onError(String errorMsg) {
+                    activity.runOnUiThread(() -> {
+                        btnSend.setEnabled(true);
+                        btnSend.setText("SEND MESSAGE");
+                        Toast.makeText(activity, "Failed to send: " + errorMsg, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        });
+
+        dialog.show();
+    }
+
+    private interface FormspreeCallback {
+        void onSuccess();
+        void onError(String errorMsg);
+    }
+
+    private void sendFeedbackToFormspree(String name, String email, String message, FormspreeCallback callback) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("name", name);
+            json.put("email", email);
+            json.put("message", message);
+            json.put("_subject", "Puter Unofficial Feedback from " + name);
+
+            MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
+            RequestBody body = RequestBody.create(json.toString(), mediaType);
+
+            Request request = new Request.Builder()
+                    .url(AppConstants.FORMSPREE_ENDPOINT_URL)
+                    .addHeader("Accept", "application/json")
+                    .post(body)
+                    .build();
+
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(15, TimeUnit.SECONDS)
+                    .build();
+
+            LiveLogManager.getInstance().process(AppConstants.TAG_SUPPORT, "Submitting Feedback", "Target: Formspree API");
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    LiveLogManager.getInstance().error(AppConstants.TAG_SUPPORT, "Feedback Submission Failed", e.getMessage());
+                    ActionReportLogger.logError("SUPPORT_FAIL", e.getMessage());
+                    callback.onError(e.getMessage());
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful()) {
+                        LiveLogManager.getInstance().ok(AppConstants.TAG_SUPPORT, "Feedback Delivered", "HTTP " + response.code());
+                        ActionReportLogger.logAction("SUPPORT_SUCCESS", "Feedback sent by " + email);
+                        callback.onSuccess();
+                    } else {
+                        String err = "HTTP " + response.code();
+                        LiveLogManager.getInstance().error(AppConstants.TAG_SUPPORT, "Feedback Rejected", err);
+                        ActionReportLogger.logError("SUPPORT_REJECT", err);
+                        callback.onError(err);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            LiveLogManager.getInstance().error(AppConstants.TAG_SUPPORT, "Feedback Error", e.getMessage());
+            callback.onError(e.getMessage());
+        }
     }
 
     // --- BROWSER & CRYPTO BOT OVERLAYS ---
