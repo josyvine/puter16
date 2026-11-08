@@ -197,7 +197,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     private ChatSession currentSession;
     private ChatMessage currentActiveAssistantMsg;
     private ChatMessage currentLiveAssistantMsg;
-    private ChatMessage currentLiveUserMsg; // Reused single user bubble per turn (fixes bubble fragmentation)
+    private ChatMessage currentLiveUserMsg; // Single unified user bubble per vocal turn
     private String activeModelId = AppConstants.DEFAULT_MODEL;
     private String activeProvider = "Puter";
     private String previousProviderBeforeLive = null;
@@ -625,7 +625,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             lastRenderedUserText = "";
             lastUserTextTimestamp = 0;
             currentLiveAssistantMsg = null;
-            currentLiveUserMsg = null; // Reset user turn bubble
+            currentLiveUserMsg = null; // Clean turn bubble reset
 
             if (tvLiveVoiceStatus != null) tvLiveVoiceStatus.setText(R.string.voice_status_listening);
             toggleStarAnimation(true);
@@ -654,7 +654,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
             if (chatAdapter == null || currentSession == null) return;
 
             try {
-                // If a user turn bubble already exists, update its content rather than spawning a new bubble
+                // Keep updating the single active turn bubble as the user speaks
                 if (currentLiveUserMsg == null) {
                     currentLiveUserMsg = new ChatMessage(
                             "live_user_" + System.currentTimeMillis(),
@@ -680,9 +680,6 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
     public void onLiveModelTranscript(String chunk, boolean isTurnFinished) {
         runOnUiThread(() -> {
             try {
-                // When model starts responding, the current user turn is complete
-                currentLiveUserMsg = null;
-
                 if (chatAdapter == null || currentSession == null) return;
 
                 if (chunk != null && !chunk.isEmpty()) {
@@ -717,7 +714,9 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
                     }
                 }
 
+                // Finalize bubbles strictly upon true turn completion
                 if (isTurnFinished) {
+                    currentLiveUserMsg = null; // Finalize user turn bubble safely
                     if (currentLiveAssistantMsg != null) {
                         currentLiveAssistantMsg.setStreaming(false);
                         chatAdapter.notifyItemChanged(chatAdapter.getItemCount() - 1);
@@ -2312,6 +2311,7 @@ public class MainActivity extends AppCompatActivity implements LiveLogManager.Lo
         Toast.makeText(this, "Connecting to Live Model: " + selectedModelText.getText(), Toast.LENGTH_SHORT).show();
 
         if (headlessAudioBridge != null) {
+            headlessAudioBridge.setGroundingEnabled(isSearchGroundingActive);
             headlessAudioBridge.startCommentarySession("auto", activeModelId, isSearchGroundingActive);
         } else {
             LiveLogManager.getInstance().error("GEMINI_LIVE", "Bridge Inactive", "HeadlessAudioBridge instance is null.");
