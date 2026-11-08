@@ -232,7 +232,7 @@ public class WebAppInterface {
                 return m;
             }
         }
-        return "gemini-3.1-flash-live-preview";
+        return "gemini-2.5-flash-native-audio-preview";
     }
 
     @JavascriptInterface
@@ -252,6 +252,23 @@ public class WebAppInterface {
     @JavascriptInterface
     public String getCustomInstruction() {
         return prefs.getString(AppConstants.KEY_CUSTOM_INSTRUCTION, "");
+    }
+
+    /**
+     * Exposes Google Search Grounding status to headless_live_audio.html
+     */
+    @JavascriptInterface
+    public boolean isGroundingEnabled() {
+        if (audioBridge != null && audioBridge.isGroundingEnabled()) {
+            return true;
+        }
+        String mode = prefs.getString("gemini_grounding_mode", "None (Standard)");
+        return "Google Search".equalsIgnoreCase(mode);
+    }
+
+    @JavascriptInterface
+    public String getGroundingMode() {
+        return prefs.getString("gemini_grounding_mode", "None (Standard)");
     }
 
     // --- PUTER SDK AUTH SYNCHRONIZATION ---
@@ -388,15 +405,15 @@ public class WebAppInterface {
     }
 
     @JavascriptInterface
-    public void onLiveModelTranscript(String text, boolean isTurnFinished) {
+    public void onLiveModelTranscript(String text, boolean isFinished) {
         if (text != null && !text.trim().isEmpty()) {
             logger.ok("LIVE_TRANSCRIPT", "Model Transcript from JS", text.trim());
         }
 
         if (audioBridge != null) {
-            audioBridge.dispatchModelTranscript(text, isTurnFinished);
+            audioBridge.dispatchModelTranscript(text, isFinished);
         } else if (mainActivity != null) {
-            mainActivity.runOnUiThread(() -> mainActivity.onLiveModelTranscript(text, isTurnFinished));
+            mainActivity.runOnUiThread(() -> mainActivity.onLiveModelTranscript(text, isFinished));
         }
     }
 
