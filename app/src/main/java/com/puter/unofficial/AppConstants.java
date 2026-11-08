@@ -41,6 +41,9 @@ public class AppConstants {
     // --- GOOGLE ADMOB CONFIGURATION ---
     public static final String ADMOB_BANNER_AD_UNIT_ID = "ca-app-pub-2223803405403727/3945903189";
 
+    // --- SUPPORT & FEEDBACK (FORMSPREE API) ---
+    public static final String FORMSPREE_ENDPOINT_URL = "https://formspree.io/f/mqakvjpd";
+
     // --- GEMINI INTEGRATION & SETTINGS ---
     public static final String KEY_ACTIVE_PROVIDER = "puter_active_provider";
     public static final String KEY_GEMINI_API_KEY = "gemini_user_api_key";
@@ -101,6 +104,7 @@ public class AppConstants {
     public static final String TAG_GEMINI_NETWORK = "GEMINI_NETWORK";
     public static final String TAG_HTTP_BRIDGE = "HTTP_BRIDGE";
     public static final String TAG_ADMOB = "ADMOB";
+    public static final String TAG_SUPPORT = "PuterSupport";
 
     // --- WATCHER SERVICE CONFIGURATION ---
     public static final int WATCHER_NOTIFICATION_ID = 1002;
