@@ -104,12 +104,12 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. Chat Timeline RecyclerView (Ghost fast-scroll lines suppressed, touch isolated) -->
+        <!-- 3. Chat Timeline RecyclerView (Anchored strictly above the entire bottom dock) -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvChatTimeline"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_above="@id/chatControlsContainer"
+            android:layout_above="@id/bottomDockWrapper"
             android:layout_below="@id/settingsBar"
             android:background="#f7f7f7"
             android:clipToPadding="false"
@@ -128,7 +128,7 @@
             android:id="@+id/ecgLoader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_above="@id/chatControlsContainer"
+            android:layout_above="@id/bottomDockWrapper"
             android:layout_centerHorizontal="true"
             android:layout_marginBottom="8dp"
             android:background="@drawable/bg_pill_badge"
@@ -171,189 +171,198 @@
                 app:tint="#ffffff" />
         </LinearLayout>
 
-        <!-- 5. Fixed Bottom Chat Controls Dock (Stacked strictly above Footer Ad Banner) -->
+        <!-- 5. Permanent Bottom Dock Wrapper (Pinned to bottom: eliminates startup layout jumps) -->
         <LinearLayout
-            android:id="@+id/chatControlsContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_above="@id/flAdBannerContainer"
-            android:background="#ffffff"
-            android:gravity="center_horizontal"
-            android:paddingStart="10dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="10dp">
-
-            <!-- Floating Pill Search Bar Container -->
-            <LinearLayout
-                android:id="@+id/puterSearchBarContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:background="@drawable/bg_input_dock"
-                android:elevation="2dp"
-                android:orientation="vertical"
-                android:padding="6dp">
-
-                <!-- Staged Thumbnails Preview Row -->
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/thumbnailArea"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp"
-                    android:orientation="horizontal"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:visibility="gone" />
-
-                <!-- Input Row -->
-                <RelativeLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="44dp">
-
-                    <!-- Plus Attachment Button -->
-                    <ImageView
-                        android:id="@+id/btnUpload"
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:layout_alignParentStart="true"
-                        android:layout_centerVertical="true"
-                        android:layout_marginStart="2dp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="Attach"
-                        android:padding="8dp"
-                        android:src="@drawable/ic_attachment_plus"
-                        app:tint="#5f6368" />
-
-                    <!-- Multiline Edit Text ("Ask Puter...") -->
-                    <EditText
-                        android:id="@+id/puterChatInput"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_centerVertical="true"
-                        android:layout_toStartOf="@id/actionButtonsContainer"
-                        android:layout_toEndOf="@id/btnUpload"
-                        android:background="@null"
-                        android:hint="Ask Puter..."
-                        android:maxLines="5"
-                        android:minHeight="40dp"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:textColor="#202124"
-                        android:textColorHint="#80868b"
-                        android:textSize="15sp" />
-
-                    <!-- Action Buttons Cluster (Mic, Voice Agent Sparkle with Unclipped Stars, Send) -->
-                    <LinearLayout
-                        android:id="@+id/actionButtonsContainer"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_alignParentEnd="true"
-                        android:layout_centerVertical="true"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- Mic Button -->
-                        <ImageView
-                            android:id="@+id/btnMic"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="Mic"
-                            android:padding="8dp"
-                            android:src="@drawable/ic_mic_pulse"
-                            app:tint="#5f6368" />
-
-                        <!-- Voice Agent Sparkle Button with Orbiting Stars -->
-                        <FrameLayout
-                            android:id="@+id/flVoiceAgentBtn"
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:layout_marginEnd="2dp"
-                            android:clipChildren="false"
-                            android:clipToPadding="false">
-
-                            <ImageView
-                                android:id="@+id/voiceAgentIcon"
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
-                                android:layout_gravity="center"
-                                android:contentDescription="Live Voice Agent"
-                                android:src="@drawable/ic_sparkle_agent"
-                                app:tint="#1a73e8" />
-
-                            <!-- Star 1 (Top Center: 12 o'clock position) -->
-                            <TextView
-                                android:id="@+id/orbitStar1"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="top|center_horizontal"
-                                android:layout_marginTop="2dp"
-                                android:text="✦"
-                                android:textColor="#1a73e8"
-                                android:textSize="11sp"
-                                android:visibility="invisible" />
-
-                            <!-- Star 2 (Bottom Right: 4 o'clock position) -->
-                            <TextView
-                                android:id="@+id/orbitStar2"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="bottom|end"
-                                android:layout_marginEnd="3dp"
-                                android:layout_marginBottom="4dp"
-                                android:text="✦"
-                                android:textColor="#1a73e8"
-                                android:textSize="10sp"
-                                android:visibility="invisible" />
-
-                            <!-- Star 3 (Bottom Left: 8 o'clock position) -->
-                            <TextView
-                                android:id="@+id/orbitStar3"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="bottom|start"
-                                android:layout_marginStart="3dp"
-                                android:layout_marginBottom="4dp"
-                                android:text="✦"
-                                android:textColor="#1a73e8"
-                                android:textSize="9sp"
-                                android:visibility="invisible" />
-                        </FrameLayout>
-
-                        <!-- Send Button -->
-                        <ImageButton
-                            android:id="@+id/btnSend"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:layout_marginEnd="2dp"
-                            android:background="@drawable/bg_pill_badge"
-                            android:backgroundTint="#1a73e8"
-                            android:contentDescription="Send"
-                            android:elevation="2dp"
-                            android:padding="8dp"
-                            android:src="@drawable/ic_send"
-                            android:visibility="gone"
-                            app:tint="#ffffff" />
-                    </LinearLayout>
-                </RelativeLayout>
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 6. Dedicated Footer AdMob Banner Container (Pinned to absolute bottom) -->
-        <FrameLayout
-            android:id="@+id/flAdBannerContainer"
+            android:id="@+id/bottomDockWrapper"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
             android:background="#ffffff"
-            android:gravity="center"
-            android:visibility="gone" />
+            android:orientation="vertical">
 
-        <!-- 7. Floating Expandable Model Accordion Menu -->
+            <!-- 5a. Chat Controls Dock -->
+            <LinearLayout
+                android:id="@+id/chatControlsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#ffffff"
+                android:gravity="center_horizontal"
+                android:paddingStart="10dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="10dp">
+
+                <!-- Floating Pill Search Bar Container -->
+                <LinearLayout
+                    android:id="@+id/puterSearchBarContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@drawable/bg_input_dock"
+                    android:elevation="2dp"
+                    android:orientation="vertical"
+                    android:padding="6dp">
+
+                    <!-- Staged Thumbnails Preview Row -->
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/thumbnailArea"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="4dp"
+                        android:orientation="horizontal"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:visibility="gone" />
+
+                    <!-- Input Row -->
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="44dp">
+
+                        <!-- Plus Attachment Button -->
+                        <ImageView
+                            android:id="@+id/btnUpload"
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"
+                            android:layout_marginStart="2dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Attach"
+                            android:padding="8dp"
+                            android:src="@drawable/ic_attachment_plus"
+                            app:tint="#5f6368" />
+
+                        <!-- Multiline Edit Text ("Ask Puter...") -->
+                        <EditText
+                            android:id="@+id/puterChatInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_centerVertical="true"
+                            android:layout_toStartOf="@id/actionButtonsContainer"
+                            android:layout_toEndOf="@id/btnUpload"
+                            android:background="@null"
+                            android:hint="Ask Puter..."
+                            android:maxLines="5"
+                            android:minHeight="40dp"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:textColor="#202124"
+                            android:textColorHint="#80868b"
+                            android:textSize="15sp" />
+
+                        <!-- Action Buttons Cluster (Mic, Voice Agent Sparkle with Unclipped Stars, Send) -->
+                        <LinearLayout
+                            android:id="@+id/actionButtonsContainer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <!-- Mic Button -->
+                            <ImageView
+                                android:id="@+id/btnMic"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="Mic"
+                                android:padding="8dp"
+                                android:src="@drawable/ic_mic_pulse"
+                                app:tint="#5f6368" />
+
+                            <!-- Voice Agent Sparkle Button with Orbiting Stars -->
+                            <FrameLayout
+                                android:id="@+id/flVoiceAgentBtn"
+                                android:layout_width="40dp"
+                                android:layout_height="40dp"
+                                android:layout_marginEnd="2dp"
+                                android:clipChildren="false"
+                                android:clipToPadding="false">
+
+                                <ImageView
+                                    android:id="@+id/voiceAgentIcon"
+                                    android:layout_width="24dp"
+                                    android:layout_height="24dp"
+                                    android:layout_gravity="center"
+                                    android:contentDescription="Live Voice Agent"
+                                    android:src="@drawable/ic_sparkle_agent"
+                                    app:tint="#1a73e8" />
+
+                                <!-- Star 1 (Top Center: 12 o'clock position) -->
+                                <TextView
+                                    android:id="@+id/orbitStar1"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="top|center_horizontal"
+                                    android:layout_marginTop="2dp"
+                                    android:text="✦"
+                                    android:textColor="#1a73e8"
+                                    android:textSize="11sp"
+                                    android:visibility="invisible" />
+
+                                <!-- Star 2 (Bottom Right: 4 o'clock position) -->
+                                <TextView
+                                    android:id="@+id/orbitStar2"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="bottom|end"
+                                    android:layout_marginEnd="3dp"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="✦"
+                                    android:textColor="#1a73e8"
+                                    android:textSize="10sp"
+                                    android:visibility="invisible" />
+
+                                <!-- Star 3 (Bottom Left: 8 o'clock position) -->
+                                <TextView
+                                    android:id="@+id/orbitStar3"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="bottom|start"
+                                    android:layout_marginStart="3dp"
+                                    android:layout_marginBottom="4dp"
+                                    android:text="✦"
+                                    android:textColor="#1a73e8"
+                                    android:textSize="9sp"
+                                    android:visibility="invisible" />
+                            </FrameLayout>
+
+                            <!-- Send Button -->
+                            <ImageButton
+                                android:id="@+id/btnSend"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:layout_marginEnd="2dp"
+                                android:background="@drawable/bg_pill_badge"
+                                android:backgroundTint="#1a73e8"
+                                android:contentDescription="Send"
+                                android:elevation="2dp"
+                                android:padding="8dp"
+                                android:src="@drawable/ic_send"
+                                android:visibility="gone"
+                                app:tint="#ffffff" />
+                        </LinearLayout>
+                    </RelativeLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 5b. Dedicated Footer AdMob Banner Container (Directly below Input Dock) -->
+            <FrameLayout
+                android:id="@+id/flAdBannerContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#ffffff"
+                android:gravity="center"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!-- 6. Floating Expandable Model Accordion Menu -->
         <androidx.cardview.widget.CardView
             android:id="@+id/accordionMenuCard"
             android:layout_width="match_parent"
@@ -375,7 +384,7 @@
                 android:paddingBottom="8dp" />
         </androidx.cardview.widget.CardView>
 
-        <!-- 8. Floating Scrollable Three-Dot Dropdown Menu (Fluid, proportional height) -->
+        <!-- 7. Floating Scrollable Three-Dot Dropdown Menu (Fluid, proportional height) -->
         <androidx.cardview.widget.CardView
             android:id="@+id/puterDropdownMenuCard"
             android:layout_width="280dp"
@@ -604,7 +613,7 @@
             </ScrollView>
         </androidx.cardview.widget.CardView>
 
-        <!-- 9. Floating Context Menu (Anchored to Top-Left for Dynamic setX/setY Touch Coordinates) -->
+        <!-- 8. Floating Context Menu (Anchored to Top-Left for Dynamic setX/setY Touch Coordinates) -->
         <androidx.cardview.widget.CardView
             android:id="@+id/customContextMenuCard"
             android:layout_width="200dp"
@@ -669,7 +678,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 10. Hidden 1x1 Pixel Background WebView for Gemini Live WebSocket & AudioContext -->
+        <!-- 9. Hidden 1x1 Pixel Background WebView for Gemini Live WebSocket & AudioContext -->
         <android.webkit.WebView
             android:id="@+id/headlessAudioWebView"
             android:layout_width="1dp"
