@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_code_block"
+    android:backgroundTint="#ffffff"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- Header Title -->
+    <TextView
+        android:id="@+id/tvHelpTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:text="Puter Unofficial Help"
+        android:textColor="#222222"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <!-- Scrollable Manual Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fadeScrollbars="false"
+        android:overScrollMode="ifContentScrolls"
+        android:scrollbars="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="12dp">
+
+            <!-- Item 1: Text Chat -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Text Chat: Type your message and hit send."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 2: Long-Press -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Long-Press: Hold any chat bubble or blank area to access settings and actions."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 3: Swipe Right-to-Left -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Swipe Right-to-Left: Swipe any message bubble to quote/re-attach its files and prompt into the input bar."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 4: Stop Response -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Stop Response: Tap the X button beside the answering spinner anytime to stop generation."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 5: Vision -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Vision: Use the '+' icon to upload images and files for the AI to analyze."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 6: Sessions -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Sessions: Long-press any session in the menu to delete it permanently."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 7: Voice Agent -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Voice Agent: Tap the sparkles for a full-screen, hands-free conversation mode."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+
+            <!-- Item 8: Sign In -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:lineSpacingExtra="3dp"
+                android:text="• Sign In: Login to Puter to enable specialized models and persistent memory."
+                android:textColor="#333333"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Action Bar (Envelope Contact Icon on Left, Close Button on Right) -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp">
+
+        <!-- Contact Support Envelope Button (Exact placement from Video 1) -->
+        <ImageButton
+            android:id="@+id/btnHelpContact"
+            android:layout_width="44dp"
+            android:layout_height="40dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/edit_text_border"
+            android:contentDescription="Contact Support"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_mail"
+            app:tint="#1a73e8" />
+
+        <!-- Close Button -->
+        <Button
+            android:id="@+id/btnHelpClose"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/edit_text_border"
+            android:minWidth="90dp"
+            android:text="Close"
+            android:textColor="#333333"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+</LinearLayout>
